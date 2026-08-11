@@ -1,0 +1,1216 @@
+TIME STAMP,NAMA GURU,TINGKATAN,TAJUK,CODE HTML,,ID SIMULASI,LINK SIMULASI
+"10/8/2026, 8:50:44 PTG",MEGAT CHAIREL ASHMAN BIN MEGAT AMINUDDIN KPM-Guru,Tingkatan 1,2.1 / 2.2 - Penyediaan Slaid Sel Pipi Haiwan dan Sel Bawang Tumbuhan,"<!DOCTYPE html>
+<html lang=""ms"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Simulasi Makmal Sains Tingkatan 1 - Bab 2: Sel Sebagai Unit Asas Kehidupan</title>
+    <!-- Tailwind CSS CDN -->
+    <script src=""https://cdn.tailwindcss.com""></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel=""stylesheet"" href=""https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"">
+    <!-- Google Fonts -->
+    <link href=""https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"" rel=""stylesheet"">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f0fdf4;
+        }
+
+        /* Custom Drag Animations & Drops */
+        .draggable-item {
+            cursor: grab;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .draggable-item:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+        
+        .dropzone-active {
+            border-color: #16a34a !important;
+            background-color: #dcfce7 !important;
+            box-shadow: 0 0 15px rgba(22, 163, 74, 0.4);
+        }
+
+        .dropzone-error {
+            border-color: #dc2626 !important;
+            background-color: #fee2e2 !important;
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+
+        @keyframes dropWater {
+            0% { transform: translateY(-30px) scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .animate-drop {
+            animation: dropWater 0.6s ease-out forwards;
+        }
+
+        @keyframes lowerCoverslip {
+            0% { transform: rotate(-35deg) translateY(-20px); opacity: 0.7; }
+            100% { transform: rotate(0deg) translateY(0); opacity: 0.95; }
+        }
+
+        .animate-coverslip {
+            animation: lowerCoverslip 1s ease-in-out forwards;
+        }
+
+        @keyframes blotStain {
+            0% { transform: scale(0.8) opacity(0); }
+            50% { transform: scale(1.1) opacity(1); }
+            100% { transform: scale(1) opacity(0.8); }
+        }
+
+        .animate-blot {
+            animation: blotStain 0.8s ease-in-out forwards;
+        }
+
+        /* Pulse hint for guidance */
+        .pulse-target {
+            animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        /* Styles for Print / Lab Report */
+        @media print {
+            body {
+                background-color: white !important;
+                color: black !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class=""min-h-screen flex flex-col text-slate-800"">
+
+    <!-- Top Navigation Header -->
+    <header class=""bg-emerald-700 text-white shadow-lg no-print"">
+        <div class=""max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4"">
+            <div class=""flex items-center gap-3"">
+                <div class=""bg-white/20 p-3 rounded-xl backdrop-blur-md"">
+                    <i class=""fa-solid fa-microscope text-2xl text-emerald-200""></i>
+                </div>
+                <div>
+                    <span class=""bg-emerald-900/60 text-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider"">Sains KSSM Tingkatan 1</span>
+                    <h1 class=""text-xl md:text-2xl font-bold"">Bab 2: Sel Sebagai Unit Asas Kehidupan</h1>
+                    <p class=""text-xs text-emerald-100"">Simulasi Interaktif Makmal Sains - Penyediaan Slaid Sel Haiwan & Sel Tumbuhan</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class=""flex items-center gap-3"">
+                <button onclick=""resetSimulation()"" class=""bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm"">
+                    <i class=""fa-solid fa-rotate-right""></i> Semula
+                </button>
+                <button onclick=""openReportModal()"" class=""bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-md"">
+                    <i class=""fa-solid fa-file-invoice""></i> Cetak Laporan Amali
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class=""flex-grow max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 no-print"">
+
+        <!-- Top Navigation Selector for Experiments -->
+        <div class=""lg:col-span-12 bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-4"">
+            <div class=""flex items-center gap-2"">
+                <span class=""text-xs font-bold uppercase text-slate-400 tracking-wider"">Pilih Aktiviti:</span>
+                <div class=""inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200"">
+                    <button id=""btn-tab-cheek"" onclick=""switchExperiment('cheek')"" class=""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 bg-emerald-600 text-white shadow-sm"">
+                        <i class=""fa-solid fa-face-smile""></i> Aktiviti 2.1: Sel Pipi (Haiwan)
+                    </button>
+                    <button id=""btn-tab-onion"" onclick=""switchExperiment('onion')"" class=""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 text-slate-600 hover:text-slate-900"">
+                        <i class=""fa-solid fa-seedling""></i> Aktiviti 2.2: Sel Bawang (Tumbuhan)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Indicator Steps -->
+            <div class=""flex items-center gap-1.5 overflow-x-auto max-w-full py-1"">
+                <div id=""step-pill-1"" class=""step-pill px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"">1. Air Suling</div>
+                <i class=""fa-solid fa-chevron-right text-xs text-slate-300""></i>
+                <div id=""step-pill-2"" class=""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500"">2. Sampel</div>
+                <i class=""fa-solid fa-chevron-right text-xs text-slate-300""></i>
+                <div id=""step-pill-3"" class=""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500"">3. Pewarna</div>
+                <i class=""fa-solid fa-chevron-right text-xs text-slate-300""></i>
+                <div id=""step-pill-4"" class=""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500"">4. Penutup Kaca</div>
+                <i class=""fa-solid fa-chevron-right text-xs text-slate-300""></i>
+                <div id=""step-pill-5"" class=""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500"">5. Kertas Turas</div>
+                <i class=""fa-solid fa-chevron-right text-xs text-slate-300""></i>
+                <div id=""step-pill-6"" class=""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500"">6. Mikroskop</div>
+            </div>
+        </div>
+
+        <!-- LEFT COLUMN: Radas & Bahan (Tool Rack) -->
+        <div class=""lg:col-span-3 bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between"">
+            <div>
+                <div class=""flex items-center justify-between mb-4 border-b pb-3"">
+                    <h2 class=""font-bold text-slate-800 text-base flex items-center gap-2"">
+                        <i class=""fa-solid fa-vial-virus text-emerald-600""></i> Rak Radas & Bahan
+                    </h2>
+                    <span class=""text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-medium border border-emerald-200"">Seret ke Slaid</span>
+                </div>
+
+                <p class=""text-xs text-slate-500 mb-4"">Sila seret radas mengikut susunan prosedur eksperimen di sebelah kanan.</p>
+
+                <!-- Draggable Tools Container -->
+                <div class=""space-y-3"" id=""tools-rack"">
+
+                    <!-- Tool 1: Penitis Air Suling -->
+                    <div id=""tool-water"" draggable=""true"" ondragstart=""handleDragStart(event, 'water')"" onclick=""handleMobileSelect('water')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div class=""w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i class=""fa-solid fa-eye-dropper""></i>
+                        </div>
+                        <div>
+                            <h3 class=""text-xs font-bold text-slate-800"">Penitis Air Suling</h3>
+                            <p class=""text-[11px] text-slate-500"">Menitiskan 1 titis air suling</p>
+                        </div>
+                    </div>
+
+                    <!-- Tool 2: Sample Tool (Dynamic: Toothpick or Forceps) -->
+                    <div id=""tool-sample"" draggable=""true"" ondragstart=""handleDragStart(event, 'sample')"" onclick=""handleMobileSelect('sample')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div id=""sample-icon-bg"" class=""w-10 h-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i id=""sample-icon"" class=""fa-solid fa-utensils""></i>
+                        </div>
+                        <div>
+                            <h3 id=""sample-title"" class=""text-xs font-bold text-slate-800"">Pencungkil Gigi</h3>
+                            <p id=""sample-desc"" class=""text-[11px] text-slate-500"">Memindahkan kikisan sel pipi</p>
+                        </div>
+                    </div>
+
+                    <!-- Tool 3: Stain Dropper (Dynamic: Methylene Blue or Iodine) -->
+                    <div id=""tool-stain"" draggable=""true"" ondragstart=""handleDragStart(event, 'stain')"" onclick=""handleMobileSelect('stain')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div id=""stain-icon-bg"" class=""w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i class=""fa-solid fa-vial""></i>
+                        </div>
+                        <div>
+                            <h3 id=""stain-title"" class=""text-xs font-bold text-slate-800"">Larutan Metilena Biru</h3>
+                            <p id=""stain-desc"" class=""text-[11px] text-slate-500"">Mewarnakan sel haiwan</p>
+                        </div>
+                    </div>
+
+                    <!-- Tool 4: Coverslip & Mounting Needle -->
+                    <div id=""tool-coverslip"" draggable=""true"" ondragstart=""handleDragStart(event, 'coverslip')"" onclick=""handleMobileSelect('coverslip')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div class=""w-10 h-10 rounded-lg bg-cyan-100 text-cyan-700 flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i class=""fa-solid fa-square""></i>
+                        </div>
+                        <div>
+                            <h3 class=""text-xs font-bold text-slate-800"">Penutup Kaca & Jarum Tenggek</h3>
+                            <p class=""text-[11px] text-slate-500"">Menutup spesimen pada sudut 45°</p>
+                        </div>
+                    </div>
+
+                    <!-- Tool 5: Filter Paper -->
+                    <div id=""tool-filter"" draggable=""true"" ondragstart=""handleDragStart(event, 'filter')"" onclick=""handleMobileSelect('filter')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div class=""w-10 h-10 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i class=""fa-solid fa-scroll""></i>
+                        </div>
+                        <div>
+                            <h3 class=""text-xs font-bold text-slate-800"">Kertas Turas</h3>
+                            <p class=""text-[11px] text-slate-500"">Menyerap lebihan pewarna</p>
+                        </div>
+                    </div>
+
+                    <!-- Tool 6: Microscope -->
+                    <div id=""tool-microscope"" draggable=""true"" ondragstart=""handleDragStart(event, 'microscope')"" onclick=""handleMobileSelect('microscope')"" class=""draggable-item bg-slate-50 hover:bg-emerald-50/60 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 flex items-center gap-3 transition group"">
+                        <div class=""w-10 h-10 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-lg group-hover:scale-110 transition-transform"">
+                            <i class=""fa-solid fa-microscope""></i>
+                        </div>
+                        <div>
+                            <h3 class=""text-xs font-bold text-slate-800"">Mikroskop Cahaya</h3>
+                            <p class=""text-[11px] text-slate-500"">Memerhati slaid spesimen</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Caution Note Box -->
+            <div id=""caution-box"" class=""mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2"">
+                <i class=""fa-solid fa-triangle-exclamation text-amber-600 mt-0.5""></i>
+                <div>
+                    <span class=""font-bold block"">Langkah Berjaga-jaga:</span>
+                    <span id=""caution-text"">Turunkan penutup kaca perlahan-lahan dengan jarum tenggek supaya tiada gelembung udara terperangkap.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER COLUMN: Interactive Bench / Drop Zone & Procedure -->
+        <div class=""lg:col-span-5 flex flex-col gap-6"">
+
+            <!-- Interactive Workbench Dropzone -->
+            <div class=""bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex-grow flex flex-col justify-between relative overflow-hidden"">
+                <div class=""flex justify-between items-center mb-2"">
+                    <h2 class=""font-bold text-slate-800 text-base flex items-center gap-2"">
+                        <i class=""fa-solid fa-flask text-emerald-600""></i> Pentas Penyediaan Slaid Kaca
+                    </h2>
+                    <span id=""current-step-badge"" class=""bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full"">Langkah 1 / 6</span>
+                </div>
+
+                <!-- Toast Warning Notification -->
+                <div id=""toast-warning"" class=""hidden absolute top-14 left-4 right-4 z-20 bg-rose-500 text-white p-3 rounded-xl text-xs font-medium shadow-lg flex items-center gap-2 animate-bounce"">
+                    <i class=""fa-solid fa-circle-exclamation text-base""></i>
+                    <span id=""toast-msg"">Kesilapan prosedur! Sila ikut urutan yang betul.</span>
+                </div>
+
+                <!-- Main Glass Slide Area (Interactive Drop Target) -->
+                <div id=""slide-dropzone"" 
+                     ondragover=""handleDragOver(event)"" 
+                     ondragleave=""handleDragLeave(event)"" 
+                     ondrop=""handleDrop(event)""
+                     onclick=""handleZoneClick()""
+                     class=""my-4 h-64 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50/80 flex flex-col items-center justify-center p-6 transition-all relative overflow-hidden pulse-target"">
+                    
+                    <!-- Visual Glass Slide Mockup -->
+                    <div id=""glass-slide-visual"" class=""w-80 h-24 bg-gradient-to-r from-cyan-50/80 via-white/90 to-cyan-50/80 border-2 border-cyan-200/90 rounded-md shadow-md relative flex items-center justify-center transition-all"">
+                        <span class=""absolute left-2 top-1 text-[9px] font-mono text-slate-400"">SLAID KACA</span>
+                        
+                        <!-- Dynamic Elements inside Glass Slide -->
+                        <div id=""slide-contents"" class=""relative w-full h-full flex items-center justify-center"">
+                            <span id=""slide-placeholder-text"" class=""text-xs text-slate-400 italic pointer-events-none"">Lepaskan radas di sini</span>
+
+                            <!-- Water Drop Graphic -->
+                            <div id=""graphic-water"" class=""hidden absolute flex flex-col items-center"">
+                                <div class=""w-10 h-10 rounded-full bg-cyan-300/40 border border-cyan-400 blur-[0.5px] animate-drop flex items-center justify-center"">
+                                    <div class=""w-4 h-4 rounded-full bg-cyan-400/60""></div>
+                                </div>
+                                <span class=""text-[9px] text-cyan-700 font-semibold mt-1 bg-white/80 px-1 rounded"">Titisan Air Suling</span>
+                            </div>
+
+                            <!-- Sample Tissue Graphic -->
+                            <div id=""graphic-sample"" class=""hidden absolute flex flex-col items-center z-10"">
+                                <div id=""sample-tissue-shape"" class=""w-8 h-8 rounded-full bg-rose-200/80 border border-rose-300 flex items-center justify-center text-[10px] text-rose-800 font-bold shadow-inner"">
+                                    Sel
+                                </div>
+                                <span id=""graphic-sample-text"" class=""text-[9px] text-slate-700 font-semibold bg-white/80 px-1 rounded mt-0.5"">Kikisan Sel Pipi</span>
+                            </div>
+
+                            <!-- Stain Droplet Graphic -->
+                            <div id=""graphic-stain"" class=""hidden absolute w-14 h-14 rounded-full mix-blend-multiply opacity-80 transition-all duration-700 z-20 flex items-center justify-center"">
+                                <div class=""w-10 h-10 rounded-full animate-ping opacity-30 bg-current""></div>
+                            </div>
+
+                            <!-- Coverslip Graphic -->
+                            <div id=""graphic-coverslip"" class=""hidden absolute w-16 h-16 bg-cyan-100/40 border border-cyan-400 shadow-sm z-30 flex items-center justify-center animate-coverslip"">
+                                <span class=""text-[8px] text-cyan-800 font-mono"">Penutup Kaca</span>
+                            </div>
+
+                            <!-- Filter Paper Blotting Graphic -->
+                            <div id=""graphic-filter"" class=""hidden absolute -right-2 top-0 w-12 h-20 bg-slate-100 border border-slate-300 shadow-md rotate-12 z-40 animate-blot flex items-center justify-center"">
+                                <span class=""text-[8px] text-slate-500 font-bold -rotate-90"">Kertas Turas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Guidance Subtitle -->
+                    <div class=""mt-4 text-center"">
+                        <p id=""guide-instruction"" class=""text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 inline-block"">
+                            Langkah 1: Seret 'Penitis Air Suling' dan lepaskan pada slaid kaca.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Live Procedure Log Box -->
+                <div class=""bg-slate-900 text-slate-200 p-3 rounded-xl text-xs font-mono h-24 overflow-y-auto space-y-1"">
+                    <div class=""text-emerald-400 font-bold mb-1"">=== LOG PROSEDUR EKSPERIMEN ===</div>
+                    <div id=""log-list"">
+                        <p class=""text-slate-400"">> Bersedia untuk memulakan penyediaan slaid...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prosedur Bertulis Textbook Accordion -->
+            <div class=""bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80"">
+                <h3 class=""font-bold text-slate-800 text-sm mb-3 flex items-center gap-2"">
+                    <i class=""fa-solid fa-list-check text-emerald-600""></i> Prosedur Rasmi Amali
+                </h3>
+                <ol id=""official-procedure-list"" class=""text-xs text-slate-600 space-y-2 list-decimal list-inside"">
+                    <!-- Populated dynamically -->
+                </ol>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Microscope Viewport & Results -->
+        <div class=""lg:col-span-4 flex flex-col gap-6"">
+
+            <!-- Microscope Viewport Panel -->
+            <div class=""bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between"">
+                <div>
+                    <div class=""flex justify-between items-center mb-3"">
+                        <h2 class=""font-bold text-slate-800 text-base flex items-center gap-2"">
+                            <i class=""fa-solid fa-circle-dot text-emerald-600""></i> Paparan Mikroskop
+                        </h2>
+                        <div class=""flex gap-1"">
+                            <button id=""btn-lens-low"" onclick=""setLens('low')"" class=""px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white"">4x / 10x (Rendah)</button>
+                            <button id=""btn-lens-high"" onclick=""setLens('high')"" class=""px-2.5 py-1 text-xs font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200"">40x (Tinggi)</button>
+                        </div>
+                    </div>
+
+                    <!-- Microscope Lens Circle Canvas Container -->
+                    <div class=""relative flex flex-col items-center justify-center my-2"">
+                        <div class=""w-64 h-64 rounded-full border-8 border-slate-800 bg-slate-950 shadow-2xl overflow-hidden relative flex items-center justify-center"">
+                            
+                            <!-- Crosshair overlay -->
+                            <div class=""absolute inset-0 border-r border-b border-emerald-500/20 pointer-events-none""></div>
+                            
+                            <!-- Lens Focus Blur Canvas Container -->
+                            <div id=""microscope-lens-content"" class=""w-full h-full flex items-center justify-center transition-all duration-300 filter blur-md opacity-30"">
+                                
+                                <!-- Empty state when slide is not on microscope -->
+                                <div id=""microscope-empty-text"" class=""text-slate-500 text-xs text-center px-6"">
+                                    <i class=""fa-solid fa-eye-slash text-2xl mb-2 block""></i>
+                                    Letakkan slaid yang telah siap di atas pentas mikroskop.
+                                </div>
+
+                                <!-- Animal Cell Graphic SVG -->
+                                <svg id=""svg-cheek-cells"" class=""hidden w-full h-full p-4"" viewBox=""0 0 200 200"">
+                                    <defs>
+                                        <radialGradient id=""blueStain"" cx=""50%"" cy=""50%"" r=""50%"">
+                                            <stop offset=""0%"" stop-color=""#3b82f6"" stop-opacity=""0.9"" />
+                                            <stop offset=""70%"" stop-color=""#60a5fa"" stop-opacity=""0.5"" />
+                                            <stop offset=""100%"" stop-color=""#93c5fd"" stop-opacity=""0.2"" />
+                                        </radialGradient>
+                                    </defs>
+                                    <!-- Cell 1 -->
+                                    <path d=""M 40,80 Q 70,50 110,65 Q 150,80 135,120 Q 110,155 60,140 Q 25,120 40,80 Z"" fill=""url(#blueStain)"" stroke=""#2563eb"" stroke-width=""1.5"" />
+                                    <circle cx=""85"" cy=""100"" r=""10"" fill=""#1e3a8a"" class=""cursor-pointer hover:scale-125 transition-transform"" onclick=""labelClicked('Nukleus')"" />
+                                    <circle cx=""85"" cy=""100"" r=""3"" fill=""#60a5fa"" />
+                                    <!-- Cytoplasm & membrane label targets -->
+                                    <circle cx=""60"" cy=""90"" r=""3"" fill=""#1d4ed8"" class=""cursor-pointer"" onclick=""labelClicked('Sitoplasma')"" />
+                                    <path d=""M 120,70 Q 135,80 130,100"" stroke=""#1d4ed8"" stroke-width=""2"" fill=""none"" class=""cursor-pointer"" onclick=""labelClicked('Membran Sel')"" />
+
+                                    <!-- Cell 2 (partial) -->
+                                    <path d=""M 120,130 Q 150,110 180,130 Q 190,160 160,180 Q 130,180 120,130 Z"" fill=""url(#blueStain)"" stroke=""#2563eb"" stroke-width=""1"" opacity=""0.7"" />
+                                    <circle cx=""155"" cy=""150"" r=""7"" fill=""#1e3a8a"" />
+                                </svg>
+
+                                <!-- Plant Cell Graphic SVG -->
+                                <svg id=""svg-onion-cells"" class=""hidden w-full h-full p-2"" viewBox=""0 0 200 200"">
+                                    <defs>
+                                        <linearGradient id=""iodineStain"" x1=""0%"" y1=""0%"" x2=""100%"" y2=""100%"">
+                                            <stop offset=""0%"" stop-color=""#f59e0b"" stop-opacity=""0.7"" />
+                                            <stop offset=""100%"" stop-color=""#d97706"" stop-opacity=""0.4"" />
+                                        </linearGradient>
+                                    </defs>
+                                    <!-- Brick-like Plant Cells Grid -->
+                                    <!-- Row 1 -->
+                                    <rect x=""15"" y=""25"" width=""80"" height=""45"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" class=""cursor-pointer"" onclick=""labelClicked('Dinding Sel')"" />
+                                    <circle cx=""65"" cy=""45"" r=""8"" fill=""#78350f"" class=""cursor-pointer"" onclick=""labelClicked('Nukleus')"" />
+                                    <rect x=""25"" y=""32"" width=""30"" height=""30"" rx=""2"" fill=""#fef3c7"" opacity=""0.5"" class=""cursor-pointer"" onclick=""labelClicked('Vakuol')"" />
+
+                                    <rect x=""100"" y=""25"" width=""85"" height=""45"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" />
+                                    <circle cx=""130"" cy=""45"" r=""8"" fill=""#78350f"" />
+
+                                    <!-- Row 2 -->
+                                    <rect x=""10"" y=""75"" width=""90"" height=""50"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" />
+                                    <circle cx=""45"" cy=""100"" r=""9"" fill=""#78350f"" class=""cursor-pointer"" onclick=""labelClicked('Nukleus')"" />
+                                    <rect x=""60"" y=""85"" width=""32"" height=""30"" rx=""2"" fill=""#fef3c7"" opacity=""0.5"" class=""cursor-pointer"" onclick=""labelClicked('Vakuol')"" />
+
+                                    <rect x=""105"" y=""75"" width=""85"" height=""50"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" />
+                                    <circle cx=""150"" cy=""100"" r=""8"" fill=""#78350f"" />
+
+                                    <!-- Row 3 -->
+                                    <rect x=""15"" y=""130"" width=""80"" height=""45"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" />
+                                    <circle cx=""70"" cy=""150"" r=""7"" fill=""#78350f"" />
+
+                                    <rect x=""100"" y=""130"" width=""85"" height=""45"" rx=""3"" fill=""url(#iodineStain)"" stroke=""#b45309"" stroke-width=""2"" />
+                                    <circle cx=""140"" cy=""150"" r=""8"" fill=""#78350f"" />
+                                </svg>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Focus Slider Control -->
+                    <div class=""mt-3 px-2"">
+                        <div class=""flex justify-between items-center text-xs mb-1"">
+                            <span class=""font-bold text-slate-700""><i class=""fa-solid fa-sliders text-emerald-600""></i> Pelaras Halus Focus:</span>
+                            <span id=""focus-val-text"" class=""font-mono text-emerald-700 font-bold"">20% (Kusam)</span>
+                        </div>
+                        <input id=""focus-slider"" type=""range"" min=""0"" max=""100"" value=""20"" oninput=""adjustFocus(this.value)"" class=""w-full accent-emerald-600 cursor-pointer"">
+                    </div>
+                </div>
+
+                <!-- Cell Structure Interactive Labeling Checklist -->
+                <div class=""mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl"">
+                    <h3 class=""text-xs font-bold text-slate-800 mb-2 flex items-center justify-between"">
+                        <span>Pengecam Komponen Sel:</span>
+                        <span id=""label-score"" class=""text-emerald-700 font-mono"">0 / 0 Ditemui</span>
+                    </h3>
+                    <div id=""cell-labels-container"" class=""flex flex-wrap gap-1.5"">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Observations Table Summary -->
+            <div class=""bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80"">
+                <h3 class=""font-bold text-slate-800 text-sm mb-3 flex items-center gap-2"">
+                    <i class=""fa-solid fa-table text-emerald-600""></i> Ringkasan Pemerhatian Sel
+                </h3>
+                <div class=""overflow-x-auto"">
+                    <table class=""w-full text-xs text-left border-collapse"">
+                        <thead>
+                            <tr class=""bg-slate-100 text-slate-700 border-b"">
+                                <th class=""p-2"">Struktur Sel</th>
+                                <th class=""p-2 text-center"">Sel Pipi (Haiwan)</th>
+                                <th class=""p-2 text-center"">Sel Bawang (Tumbuhan)</th>
+                            </tr>
+                        </thead>
+                        <tbody id=""observation-table-body"" class=""divide-y text-slate-600"">
+                            <tr>
+                                <td class=""p-2 font-medium"">Bentuk Sel</td>
+                                <td id=""obs-cheek-shape"" class=""p-2 text-center font-semibold text-slate-400"">Tidak Tetap</td>
+                                <td id=""obs-onion-shape"" class=""p-2 text-center font-semibold text-slate-400"">Tetap (Segi Empat)</td>
+                            </tr>
+                            <tr>
+                                <td class=""p-2 font-medium"">Membran Sel</td>
+                                <td id=""obs-cheek-membrane"" class=""p-2 text-center"">Ada</td>
+                                <td id=""obs-onion-membrane"" class=""p-2 text-center"">Ada</td>
+                            </tr>
+                            <tr>
+                                <td class=""p-2 font-medium"">Dinding Sel</td>
+                                <td id=""obs-cheek-wall"" class=""p-2 text-center text-rose-500"">Tiada</td>
+                                <td id=""obs-onion-wall"" class=""p-2 text-center text-emerald-600 font-bold"">Ada</td>
+                            </tr>
+                            <tr>
+                                <td class=""p-2 font-medium"">Nukleus</td>
+                                <td id=""obs-cheek-nucleus"" class=""p-2 text-center"">Ada</td>
+                                <td id=""obs-onion-nucleus"" class=""p-2 text-center"">Ada</td>
+                            </tr>
+                            <tr>
+                                <td class=""p-2 font-medium"">Sitoplasma</td>
+                                <td id=""obs-cheek-cytoplasm"" class=""p-2 text-center"">Ada</td>
+                                <td id=""obs-onion-cytoplasm"" class=""p-2 text-center"">Ada</td>
+                            </tr>
+                            <tr>
+                                <td class=""p-2 font-medium"">Vakuol</td>
+                                <td id=""obs-cheek-vacuole"" class=""p-2 text-center text-rose-500"">Tiada</td>
+                                <td id=""obs-onion-vacuole"" class=""p-2 text-center text-emerald-600 font-bold"">Ada (Besar)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- PRINTABLE LAB REPORT MODAL / PRINT VIEW -->
+    <div id=""report-modal"" class=""hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto no-print"">
+        <div class=""bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto"">
+            <button onclick=""closeReportModal()"" class=""absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl font-bold"">
+                <i class=""fa-solid fa-xmark""></i>
+            </button>
+
+            <div class=""border-b pb-4 mb-4"">
+                <h2 class=""text-xl font-bold text-slate-800 flex items-center gap-2"">
+                    <i class=""fa-solid fa-file-export text-emerald-600""></i> Jana Laporan Amali Sains
+                </h2>
+                <p class=""text-xs text-slate-500"">Masukkan maklumat diri untuk mencetak Laporan Eksperimen lengkap Sains Tingkatan 1.</p>
+            </div>
+
+            <!-- Student Metadata Form -->
+            <div class=""grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200"">
+                <div>
+                    <label class=""block text-xs font-bold text-slate-700 mb-1"">Nama Murid:</label>
+                    <input id=""input-student-name"" type=""text"" placeholder=""Ahmad Bin Abdullah"" class=""w-full text-xs p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"">
+                </div>
+                <div>
+                    <label class=""block text-xs font-bold text-slate-700 mb-1"">Tingkatan / Kelas:</label>
+                    <input id=""input-student-class"" type=""text"" placeholder=""1 Ibnu Sina"" class=""w-full text-xs p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"">
+                </div>
+                <div>
+                    <label class=""block text-xs font-bold text-slate-700 mb-1"">Tarikh Amali:</label>
+                    <input id=""input-student-date"" type=""date"" class=""w-full text-xs p-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"">
+                </div>
+            </div>
+
+            <!-- Preview Summary -->
+            <div class=""space-y-3 text-xs text-slate-700 mb-6 bg-emerald-50/50 p-4 rounded-xl border border-emerald-200"">
+                <h3 class=""font-bold text-emerald-900 border-b border-emerald-200 pb-1"">Status Kelengkapan Eksperimen:</h3>
+                <div class=""flex items-center justify-between"">
+                    <span>Aktiviti 2.1: Sel Pipi (Haiwan):</span>
+                    <span id=""status-report-cheek"" class=""font-bold text-rose-600""><i class=""fa-solid fa-circle-xmark""></i> Belum Diselesaikan</span>
+                </div>
+                <div class=""flex items-center justify-between"">
+                    <span>Aktiviti 2.2: Sel Bawang (Tumbuhan):</span>
+                    <span id=""status-report-onion"" class=""font-bold text-rose-600""><i class=""fa-solid fa-circle-xmark""></i> Belum Diselesaikan</span>
+                </div>
+            </div>
+
+            <div class=""flex justify-end gap-3 border-t pt-4"">
+                <button onclick=""closeReportModal()"" class=""px-4 py-2 rounded-lg text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700"">Tutup</button>
+                <button onclick=""triggerPrint()"" class=""px-5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-2"">
+                    <i class=""fa-solid fa-print""></i> Cetak Laporan Amali (PDF)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORMAL PRINTABLE LAB REPORT CONTENT (Visible only during window.print()) -->
+    <div id=""printable-report"" class=""print-only p-8 max-w-4xl mx-auto font-serif"">
+        <div class=""text-center border-b-2 border-black pb-4 mb-6"">
+            <h1 class=""text-xl font-bold uppercase tracking-wide"">LAPORAN AMALI SAINS TINGKATAN 1</h1>
+            <h2 class=""text-md font-semibold"">BAB 2: SEL SEBAGAI UNIT ASAS KEHIDUPAN</h2>
+            <p class=""text-sm italic mt-1"">Aktiviti 2.1 & 2.2: Mengkaji Struktur Sel Haiwan dan Sel Tumbuhan</p>
+        </div>
+
+        <!-- Student Info Header Table -->
+        <table class=""w-full text-xs border border-black mb-6"">
+            <tr>
+                <td class=""p-2 font-bold border border-black bg-gray-100"">NAMA MURID:</td>
+                <td id=""print-name"" class=""p-2 border border-black"">-</td>
+                <td class=""p-2 font-bold border border-black bg-gray-100"">TINGKATAN:</td>
+                <td id=""print-class"" class=""p-2 border border-black"">-</td>
+                <td class=""p-2 font-bold border border-black bg-gray-100"">TARIKH:</td>
+                <td id=""print-date"" class=""p-2 border border-black"">-</td>
+            </tr>
+        </table>
+
+        <!-- Objective & Materials -->
+        <div class=""space-y-4 text-xs mb-6"">
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">1. TUJUAN EKSPERIMEN</h3>
+                <p class=""mt-1"">Mengkaji dan membandingkan struktur sel haiwan (sel pipi) dan sel tumbuhan (sel bawang) menggunakan mikroskop cahaya.</p>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">2. BAHAN DAN RADAS</h3>
+                <p class=""mt-1"">Slaid kaca, penutup kaca, mikroskop cahaya, pencungkil gigi, forseps, jarum tenggek, larutan metilena biru, larutan iodin, air suling, kertas turas, bawang.</p>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">3. PEMBOLEHUBAH</h3>
+                <ul class=""list-disc list-inside mt-1 space-y-0.5"">
+                    <li><strong>Pembolehubah Dimanipulasi:</strong> Jenis sel (sel pipi haiwan dan sel bawang tumbuhan).</li>
+                    <li><strong>Pembolehubah Bergerak Balas:</strong> Struktur dan bentuk sel yang diperhatikan di bawah mikroskop.</li>
+                    <li><strong>Pembolehubah Dimalarkan:</strong> Kuasa pembesaran mikroskop cahaya.</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">4. PROSEDUR</h3>
+                <ol class=""list-decimal list-inside mt-1 space-y-1"">
+                    <li>Setitik air suling dititiskan di atas slaid kaca yang bersih.</li>
+                    <li>Kikisan sel pipi / lapisan epidermis bawang dipindahkan ke atas slaid kaca.</li>
+                    <li>Setitik larutan metilena biru (sel pipi) / larutan iodin (sel bawang) dititiskan di atas spesimen.</li>
+                    <li>Penutup kaca diturunkan perlahan-lahan menggunakan jarum tenggek pada sudut 45° bagi mengelakkan gelembung udara terperangkap.</li>
+                    <li>Lebihan pewarna diserap menggunakan kertas turas.</li>
+                    <li>Slaid diperhati di bawah mikroskop cahaya dengan kanta objek kuasa rendah diikuti kanta objek kuasa tinggi.</li>
+                </ol>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline mb-2"">5. JADUAL KEPUTUSAN PEMERHATIAN</h3>
+                <table class=""w-full text-xs border-collapse border border-black text-center"">
+                    <thead>
+                        <tr class=""bg-gray-200"">
+                            <th class=""border border-black p-1.5"">Ciri / Struktur Sel</th>
+                            <th class=""border border-black p-1.5"">Sel Pipi (Haiwan)</th>
+                            <th class=""border border-black p-1.5"">Sel Bawang (Tumbuhan)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Bentuk Sel</td>
+                            <td class=""border border-black p-1.5"">Tidak Tetap / Tidak Sekata</td>
+                            <td class=""border border-black p-1.5"">Tetap (Segi Empat Bujur)</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Membran Sel</td>
+                            <td class=""border border-black p-1.5"">Ada</td>
+                            <td class=""border border-black p-1.5"">Ada</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Dinding Sel</td>
+                            <td class=""border border-black p-1.5"">Tiada</td>
+                            <td class=""border border-black p-1.5"">Ada</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Nukleus</td>
+                            <td class=""border border-black p-1.5"">Ada (Warna Biru Dark)</td>
+                            <td class=""border border-black p-1.5"">Ada (Warna Perang/Kuning)</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Sitoplasma</td>
+                            <td class=""border border-black p-1.5"">Ada</td>
+                            <td class=""border border-black p-1.5"">Ada</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Vakuol</td>
+                            <td class=""border border-black p-1.5"">Tiada / Sangat Kecil</td>
+                            <td class=""border border-black p-1.5"">Ada (Saiz Besar)</td>
+                        </tr>
+                        <tr>
+                            <td class=""border border-black p-1.5 font-bold"">Kloroplas</td>
+                            <td class=""border border-black p-1.5"">Tiada</td>
+                            <td class=""border border-black p-1.5"">Tiada (Bawang dalam tanah)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">6. PERBINCANGAN</h3>
+                <p class=""mt-1"">
+                    1. Larutan metilena biru digunakan untuk mewarnakan nukleus sel pipi supaya kelihatan jelas di bawah mikroskop.<br>
+                    2. Larutan iodin digunakan untuk mewarnakan struktur sel bawang terutamanya nukleus dan dinding sel.<br>
+                    3. Penutup kaca perlu diturunkan secara perlahan-lahan menggunakan jarum tenggek untuk mengelakkan gelembung udara daripada terperangkap yang boleh mengganggu pemerhatian.
+                </p>
+            </div>
+
+            <div>
+                <h3 class=""font-bold text-sm uppercase underline"">7. KESIMPULAN</h3>
+                <p class=""mt-1"">
+                    Sel haiwan mempunyai bentuk tidak tetap dan tidak mempunyai dinding sel atau vakuol besar. Manakala sel tumbuhan mempunyai bentuk tetap, dinding sel, dan vakuol yang besar. Kedua-dua sel mempunyai membran sel, nukleus, dan sitoplasma.
+                </p>
+            </div>
+        </div>
+
+        <!-- Signature Footer -->
+        <div class=""mt-12 flex justify-between text-xs pt-4 border-t border-gray-400"">
+            <div class=""text-center w-40"">
+                <div class=""border-b border-black h-10""></div>
+                <p class=""mt-1"">Tandatangan Murid</p>
+            </div>
+            <div class=""text-center w-40"">
+                <div class=""border-b border-black h-10""></div>
+                <p class=""mt-1"">Tandatangan Guru Sains</p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- SIMULATION JAVASCRIPT LOGIC -->
+    <script>
+        // State Machine Object
+        const state = {
+            currentExp: 'cheek', // 'cheek' or 'onion'
+            step: 1, // 1 to 6
+            selectedMobileTool: null,
+            completed: {
+                cheek: false,
+                onion: false
+            },
+            slidePrepared: {
+                water: false,
+                sample: false,
+                stain: false,
+                coverslip: false,
+                filter: false,
+                microscope: false
+            },
+            microscope: {
+                focus: 20,
+                lens: 'low',
+                labelsFound: new Set()
+            }
+        };
+
+        // Experiment Configuration Data
+        const expConfig = {
+            cheek: {
+                title: ""Aktiviti 2.1: Sel Pipi Haiwan"",
+                sampleTitle: ""Pencungkil Gigi"",
+                sampleDesc: ""Memindahkan kikisan sel pipi"",
+                sampleIcon: ""fa-utensils"",
+                sampleIconBg: ""bg-amber-100 text-amber-800"",
+                stainTitle: ""Metilena Biru"",
+                stainDesc: ""Mewarnakan nukleus sel haiwan"",
+                stainColorBg: ""bg-blue-600 text-white"",
+                stainDropColor: ""#2563eb"",
+                caution: ""Kikis bahagian dalam pipi dengan perlahan menggunakan pencungkil gigi yang bersih."",
+                labels: ['Nukleus', 'Membran Sel', 'Sitoplasma'],
+                procedures: [
+                    ""Titiskan setitik air suling ke atas slaid kaca."",
+                    ""Kikis bahagian dalam pipi dengan menggunakan pencungkil gigi secara perlahan."",
+                    ""Letakkan kikisan sel pipi itu ke dalam titisan air suling pada slaid kaca."",
+                    ""Titiskan setitik larutan metilena biru di atas spesimen."",
+                    ""Tutup spesimen dengan penutup kaca menggunakan jarum tenggek secara perlahan-lahan pada sudut 45°."",
+                    ""Gunakan kertas turas untuk menyerap sebarang larutan metilena biru yang berlebihan."",
+                    ""Perhatikan slaid di bawah mikroskop dengan kanta objek kuasa rendah diikuti kuasa tinggi.""
+                ]
+            },
+            onion: {
+                title: ""Aktiviti 2.2: Sel Bawang Tumbuhan"",
+                sampleTitle: ""Forseps Epidermis"",
+                sampleDesc: ""Memindahkan lapisan epidermis bawang"",
+                sampleIcon: ""fa-scissors"",
+                sampleIconBg: ""bg-rose-100 text-rose-800"",
+                stainTitle: ""Larutan Iodin"",
+                stainDesc: ""Mewarnakan struktur sel tumbuhan"",
+                stainColorBg: ""bg-amber-600 text-white"",
+                stainDropColor: ""#d97706"",
+                caution: ""Berhati-hati apabila menggunakan pisau/forseps untuk mengupas lapisan epidermis bawang."",
+                labels: ['Dinding Sel', 'Nukleus', 'Sitoplasma', 'Vakuol'],
+                procedures: [
+                    ""Titiskan setitik air suling ke atas slaid kaca."",
+                    ""Kupas lapisan epidermis lut sinar daripada daun sisik sukulen bawang menggunakan forseps."",
+                    ""Letakkan lapisan epidermis bawang di atas slaid kaca."",
+                    ""Titiskan setitik larutan iodin di atas spesimen."",
+                    ""Letakkan penutup kaca perlahan-lahan di atas spesimen dengan jarum tenggek supaya tiada gelembung udara terperangkap."",
+                    ""Gunakan kertas turas untuk menyerap sebarang larutan iodin yang berlebihan."",
+                    ""Perhatikan slaid di bawah mikroskop dengan kanta objek kuasa rendah dan kuasa tinggi.""
+                ]
+            }
+        };
+
+        // Sound Synthesis Effects (Web Audio API)
+        function pl","ayAudioEffect(type) {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'drop') {
+                    osc.frequency.setValueAtTime(450, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.12);
+                } else if (type === 'success') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
+                    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.35);
+                } else if (type === 'error') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, ctx.currentTime);
+                    osc.frequency.setValueAtTime(120, ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.25);
+                }
+            } catch (e) {
+                // Audio fallback
+            }
+        }
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            renderExperimentUI();
+            // Default date input to today
+            document.getElementById('input-student-date').valueAsDate = new Date();
+        });
+
+        // Switch Between Cheek and Onion Experiments
+        function switchExperiment(expKey) {
+            state.currentExp = expKey;
+            resetSimulation();
+
+            // Update Tab Highlight
+            const btnCheek = document.getElementById('btn-tab-cheek');
+            const btnOnion = document.getElementById('btn-tab-onion');
+
+            if (expKey === 'cheek') {
+                btnCheek.className = ""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 bg-emerald-600 text-white shadow-sm"";
+                btnOnion.className = ""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 text-slate-600 hover:text-slate-900"";
+            } else {
+                btnOnion.className = ""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 bg-emerald-600 text-white shadow-sm"";
+                btnCheek.className = ""px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 text-slate-600 hover:text-slate-900"";
+            }
+
+            renderExperimentUI();
+        }
+
+        // Render UI Based on Selected Experiment
+        function renderExperimentUI() {
+            const config = expConfig[state.currentExp];
+
+            // Render Tools Rack Information
+            document.getElementById('sample-title').innerText = config.sampleTitle;
+            document.getElementById('sample-desc').innerText = config.sampleDesc;
+            document.getElementById('sample-icon').className = `fa-solid ${config.sampleIcon}`;
+            document.getElementById('sample-icon-bg').className = `w-10 h-10 rounded-lg ${config.sampleIconBg} flex items-center justify-center text-lg group-hover:scale-110 transition-transform`;
+
+            document.getElementById('stain-title').innerText = config.stainTitle;
+            document.getElementById('stain-desc').innerText = config.stainDesc;
+            document.getElementById('stain-icon-bg').className = `w-10 h-10 rounded-lg ${config.stainColorBg} flex items-center justify-center text-lg group-hover:scale-110 transition-transform`;
+
+            document.getElementById('caution-text').innerText = config.caution;
+            document.getElementById('graphic-sample-text').innerText = config.sampleTitle;
+
+            // Render Official Procedure List
+            const procOl = document.getElementById('official-procedure-list');
+            procOl.innerHTML = config.procedures.map(p => `<li>${p}</li>`).join('');
+
+            updateStepUI();
+        }
+
+        // Reset Current Experiment State
+        function resetSimulation() {
+            state.step = 1;
+            state.selectedMobileTool = null;
+            state.slidePrepared = {
+                water: false,
+                sample: false,
+                stain: false,
+                coverslip: false,
+                filter: false,
+                microscope: false
+            };
+            state.microscope.focus = 20;
+            state.microscope.labelsFound.clear();
+
+            // Hide visuals
+            document.getElementById('graphic-water').classList.add('hidden');
+            document.getElementById('graphic-sample').classList.add('hidden');
+            document.getElementById('graphic-stain').classList.add('hidden');
+            document.getElementById('graphic-coverslip').classList.add('hidden');
+            document.getElementById('graphic-filter').classList.add('hidden');
+            document.getElementById('slide-placeholder-text').classList.remove('hidden');
+
+            // Reset Microscope
+            document.getElementById('svg-cheek-cells').classList.add('hidden');
+            document.getElementById('svg-onion-cells').classList.add('hidden');
+            document.getElementById('microscope-empty-text').classList.remove('hidden');
+            document.getElementById('focus-slider').value = 20;
+            adjustFocus(20);
+
+            // Clear Log
+            document.getElementById('log-list').innerHTML = `<p class=""text-slate-400"">> Simulasi diset semula. Bersedia untuk Langkah 1...</p>`;
+
+            updateStepUI();
+        }
+
+        // Handle Drag & Drop Logic
+        function handleDragStart(e, toolType) {
+            e.dataTransfer.setData('text/plain', toolType);
+            state.selectedMobileTool = toolType;
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            const dropzone = document.getElementById('slide-dropzone');
+            dropzone.classList.add('dropzone-active');
+        }
+
+        function handleDragLeave(e) {
+            const dropzone = document.getElementById('slide-dropzone');
+            dropzone.classList.remove('dropzone-active');
+        }
+
+        function handleMobileSelect(toolType) {
+            state.selectedMobileTool = toolType;
+            // Visual highlight for mobile selection
+            document.querySelectorAll('.draggable-item').forEach(item => item.classList.remove('ring-2', 'ring-emerald-500'));
+            const selectedElem = document.getElementById(`tool-${toolType}`);
+            if (selectedElem) selectedElem.classList.add('ring-2', 'ring-emerald-500');
+            
+            logAction(`[PILIHAN MOBILE] Radas dipilih: ${toolType.toUpperCase()}. Ketuk pentas slaid untuk meletakkan.`);
+        }
+
+        function handleZoneClick() {
+            if (state.selectedMobileTool) {
+                processStep(state.selectedMobileTool);
+                state.selectedMobileTool = null;
+                document.querySelectorAll('.draggable-item').forEach(item => item.classList.remove('ring-2', 'ring-emerald-500'));
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const dropzone = document.getElementById('slide-dropzone');
+            dropzone.classList.remove('dropzone-active');
+            const toolType = e.dataTransfer.getData('text/plain') || state.selectedMobileTool;
+            processStep(toolType);
+        }
+
+        // Core Step Verification Engine
+        function processStep(toolType) {
+            const stepOrder = ['water', 'sample', 'stain', 'coverslip', 'filter', 'microscope'];
+            const expectedTool = stepOrder[state.step - 1];
+
+            if (toolType !== expectedTool) {
+                // Procedure Error
+                playAudioEffect('error');
+                showWarningToast(`Kesilapan Prosedur! Anda sepatutnya menggunakan '${getToolName(expectedTool)}' untuk Langkah ${state.step}.`);
+                const dropzone = document.getElementById('slide-dropzone');
+                dropzone.classList.add('dropzone-error');
+                setTimeout(() => dropzone.classList.remove('dropzone-error'), 500);
+                return;
+            }
+
+            // Valid Step Execution
+            playAudioEffect('drop');
+            document.getElementById('slide-placeholder-text').classList.add('hidden');
+
+            if (toolType === 'water') {
+                state.slidePrepared.water = true;
+                document.getElementById('graphic-water').classList.remove('hidden');
+                logAction(""✓ Berjaya menitiskan setitik air suling pada slaid kaca."");
+            } else if (toolType === 'sample') {
+                state.slidePrepared.sample = true;
+                document.getElementById('graphic-sample').classList.remove('hidden');
+                logAction(`✓ Berjaya memindahkan spesimen (${expConfig[state.currentExp].sampleTitle}) ke atas slaid.`);
+            } else if (toolType === 'stain') {
+                state.slidePrepared.stain = true;
+                const stainElem = document.getElementById('graphic-stain');
+                stainElem.style.backgroundColor = expConfig[state.currentExp].stainDropColor;
+                stainElem.classList.remove('hidden');
+                logAction(`✓ Berjaya menitiskan pewarna (${expConfig[state.currentExp].stainTitle}).`);
+            } else if (toolType === 'coverslip') {
+                state.slidePrepared.coverslip = true;
+                document.getElementById('graphic-coverslip').classList.remove('hidden');
+                logAction(""✓ Penutup kaca diturunkan perlahan-lahan menggunakan jarum tenggek pada sudut 45°."");
+            } else if (toolType === 'filter') {
+                state.slidePrepared.filter = true;
+                document.getElementById('graphic-filter').classList.remove('hidden');
+                setTimeout(() => document.getElementById('graphic-filter').classList.add('hidden'), 1200);
+                logAction(""✓ Lebihan pewarna diserap dengan kertas turas."");
+            } else if (toolType === 'microscope') {
+                state.slidePrepared.microscope = true;
+                state.completed[state.currentExp] = true;
+                playAudioEffect('success');
+                logAction(""🎉 Slaid bersedia! Spesimen berjaya diletakkan di bawah mikroskop."");
+                loadMicroscopeView();
+            }
+
+            if (state.step < 6) {
+                state.step++;
+            }
+
+            updateStepUI();
+        }
+
+        // Tool Names Mapping
+        function getToolName(toolKey) {
+            const names = {
+                water: 'Penitis Air Suling',
+                sample: expConfig[state.currentExp].sampleTitle,
+                stain: expConfig[state.currentExp].stainTitle,
+                coverslip: 'Penutup Kaca & Jarum Tenggek',
+                filter: 'Kertas Turas',
+                microscope: 'Mikroskop Cahaya'
+            };
+            return names[toolKey] || toolKey;
+        }
+
+        // Show Toast Warning
+        function showWarningToast(msg) {
+            const toast = document.getElementById('toast-warning');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+
+        // Append to Live Log
+        function logAction(msg) {
+            const logContainer = document.getElementById('log-list');
+            const p = document.createElement('p');
+            p.className = ""text-emerald-300 font-mono"";
+            p.innerText = `> ${msg}`;
+            logContainer.appendChild(p);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Update Step Pills & Guide Text
+        function updateStepUI() {
+            document.getElementById('current-step-badge').innerText = `Langkah ${state.step} / 6`;
+
+            // Update Pills
+            for (let i = 1; i <= 6; i++) {
+                const pill = document.getElementById(`step-pill-${i}`);
+                if (i < state.step) {
+                    pill.className = ""step-pill px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white"";
+                } else if (i === state.step) {
+                    pill.className = ""step-pill px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-400 animate-pulse"";
+                } else {
+                    pill.className = ""step-pill px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-400"";
+                }
+            }
+
+            // Update Dynamic Guide Message
+            const guideText = document.getElementById('guide-instruction');
+            const nextTool = ['water', 'sample', 'stain', 'coverslip', 'filter', 'microscope'][state.step - 1];
+            
+            if (state.step === 6 && state.slidePrepared.microscope) {
+                guideText.innerText = ""Slaid siap! Sila laraskan Pelaras Halus pada paparan Mikroskop di sebelah kanan."";
+                guideText.className = ""text-xs font-bold text-purple-900 bg-purple-100 px-3 py-1.5 rounded-lg border border-purple-300 inline-block"";
+            } else {
+                guideText.innerText = `Langkah ${state.step}: Seret '${getToolName(nextTool)}' dan lepaskan pada slaid kaca.`;
+                guideText.className = ""text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 inline-block"";
+            }
+
+            // Update Observation Table UI Status
+            if (state.completed.cheek) {
+                document.getElementById('obs-cheek-shape').className = ""p-2 text-center font-bold text-slate-800"";
+                document.getElementById('obs-cheek-membrane').className = ""p-2 text-center font-bold text-emerald-600"";
+                document.getElementById('obs-cheek-nucleus').className = ""p-2 text-center font-bold text-emerald-600"";
+                document.getElementById('obs-cheek-cytoplasm').className = ""p-2 text-center font-bold text-emerald-600"";
+            }
+            if (state.completed.onion) {
+                document.getElementById('obs-onion-shape').className = ""p-2 text-center font-bold text-slate-800"";
+                document.getElementById('obs-onion-membrane').className = ""p-2 text-center font-bold text-emerald-600"";
+                document.getElementById('obs-onion-nucleus').className = ""p-2 text-center font-bold text-emerald-600"";
+                document.getElementById('obs-onion-cytoplasm').className = ""p-2 text-center font-bold text-emerald-600"";
+            }
+        }
+
+        // Load Cells Visual in Microscope Viewport
+        function loadMicroscopeView() {
+            document.getElementById('microscope-empty-text').classList.add('hidden');
+            
+            if (state.currentExp === 'cheek') {
+                document.getElementById('svg-cheek-cells').classList.remove('hidden');
+                document.getElementById('svg-onion-cells').classList.add('hidden');
+            } else {
+                document.getElementById('svg-onion-cells').classList.remove('hidden');
+                document.getElementById('svg-cheek-cells').classList.add('hidden');
+            }
+
+            renderLabelChecklist();
+        }
+
+        // Adjust Focus Slider
+        function adjustFocus(val) {
+            state.microscope.focus = val;
+            const lensContent = document.getElementById('microscope-lens-content');
+            const focusText = document.getElementById('focus-val-text');
+
+            // Calculate blur filter based on focus distance from optimal (100)
+            const blurVal = Math.abs(100 - val) / 10;
+            const opacityVal = 0.3 + (val / 100) * 0.7;
+
+            lensContent.style.filter = `blur(${blurVal}px)`;
+            lensContent.style.opacity = opacityVal;
+
+            if (val >= 85) {
+                focusText.innerText = `${val}% (Sangat Jelas / Fokus)`;
+                focusText.className = ""font-mono text-emerald-600 font-bold"";
+            } else if (val >= 50) {
+                focusText.innerText = `${val}% (Sederhana Jelas)`;
+                focusText.className = ""font-mono text-amber-600 font-bold"";
+            } else {
+                focusText.innerText = `${val}% (Kusam / Kabur)`;
+                focusText.className = ""font-mono text-rose-500 font-bold"";
+            }
+        }
+
+        // Toggle Lens Objective Power
+        function setLens(power) {
+            state.microscope.lens = power;
+            const btnLow = document.getElementById('btn-lens-low');
+            const btnHigh = document.getElementById('btn-lens-high');
+            const cheekSvg = document.getElementById('svg-cheek-cells');
+            const onionSvg = document.getElementById('svg-onion-cells');
+
+            if (power === 'low') {
+                btnLow.className = ""px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white"";
+                btnHigh.className = ""px-2.5 py-1 text-xs font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200"";
+                cheekSvg.style.transform = ""scale(1)"";
+                onionSvg.style.transform = ""scale(1)"";
+            } else {
+                btnHigh.className = ""px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white"";
+                btnLow.className = ""px-2.5 py-1 text-xs font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200"";
+                cheekSvg.style.transform = ""scale(1.7)"";
+                onionSvg.style.transform = ""scale(1.7)"";
+            }
+        }
+
+        // Component Label Interactive Discovery
+        function renderLabelChecklist() {
+            const labels = expConfig[state.currentExp].labels;
+            const container = document.getElementById('cell-labels-container');
+            
+            container.innerHTML = labels.map(label => {
+                const found = state.microscope.labelsFound.has(label);
+                return `
+                    <span class=""px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${found ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200'}"">
+                        <i class=""fa-solid ${found ? 'fa-circle-check text-emerald-600' : 'fa-circle-dot'}""></i> ${label}
+                    </span>
+                `;
+            }).join('');
+
+            document.getElementById('label-score').innerText = `${state.microscope.labelsFound.size} / ${labels.length} Ditemui`;
+        }
+
+        function labelClicked(labelName) {
+            if (!state.slidePrepared.microscope) return;
+            state.microscope.labelsFound.add(labelName);
+            playAudioEffect('success');
+            renderLabelChecklist();
+            logAction(`🔍 Struktur Ditemui: ${labelName}!`);
+        }
+
+        // Report Modal Controls
+        function openReportModal() {
+            document.getElementById('report-modal').classList.remove('hidden');
+            
+            // Update Report Completion Status Indicators
+            const cheekStatus = document.getElementById('status-report-cheek');
+            const onionStatus = document.getElementById('status-report-onion');
+
+            if (state.completed.cheek) {
+                cheekStatus.className = ""font-bold text-emerald-600"";
+                cheekStatus.innerHTML = `<i class=""fa-solid fa-circle-check""></i> Selesai`;
+            }
+            if (state.completed.onion) {
+                onionStatus.className = ""font-bold text-emerald-600"";
+                onionStatus.innerHTML = `<i class=""fa-solid fa-circle-check""></i> Selesai`;
+            }
+        }
+
+        function closeReportModal() {
+            document.getElementById('report-modal').classList.add('hidden');
+        }
+
+        // Trigger Window Print with Formatted Lab Report
+        function triggerPrint() {
+            const name = document.getElementById('input-student-name').value || ""MOHD AMIRUL BIN HASSAN"";
+            const studentClass = document.getElementById('input-student-class').value || ""1 IBNU SINA"";
+            const date = document.getElementById('input-student-date').value || new Date().toISOString().split('T')[0];
+
+            document.getElementById('print-name').innerText = name;
+            document.getElementById('print-class').innerText = studentClass;
+            document.getElementById('print-date').innerText = date;
+
+            window.print();
+        }
+    </script>
+</body>
+</html>
+```eof
+
+Your interactive simulation HTML deck for Sains Tingkatan 1 (Bab 2: Sel Sebagai Unit Asas Kehidupan - Aktiviti 2.1 & 2.2) is ready! Feel free to open the file in any browser to test the interactive drag-and-drop mechanics, microscope viewing, and lab report printing.",SS-0001,https://script.google.com/macros/s/AKfycbyBL3nng7I0_ADtD7raoMJhrw1Z41KU_dnxBQi9cYRr2WbfD59kLnPvKsazRcz6-H2acg/exec?qid=SS-0001

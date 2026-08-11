@@ -1,0 +1,6 @@
+{
+  "name": "EDUMAX INTERAKTIF & LIVE GAMIFICATION STUDIO",
+  "description": "Platform Pengujian & Gamifikasi Dua Mod: Pembinaan Soalan Interaktif KSSM dan Studio Gamifikasi Live & Simulasi Eksperimen Sains dengan Integrasi Google Classroom & Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
