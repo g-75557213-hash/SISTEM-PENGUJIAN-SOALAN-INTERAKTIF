@@ -86,27 +86,23 @@ export default function StudentView({
 
   const handleVerifyDelima = () => {
     const emailLower = delimaEmail.toLowerCase().trim();
-    const nameTrimmed = delimaName.trim();
+    const nameUpper = delimaName.toUpperCase().trim();
 
-    if (!emailLower) {
-      alert("Sila masukkan e-mel anda.");
-      return;
-    }
-    if (emailLower.indexOf('@') === -1) {
+    if (emailLower && emailLower.indexOf('@') === -1) {
       alert("Ralat: Sila masukkan e-mel yang sah.");
       return;
     }
-    if (!nameTrimmed) {
+    if (!nameUpper) {
       alert("Sila masukkan nama penuh anda.");
       return;
     }
 
     if (user) {
       localStorage.setItem(`delima_email_${user.uid}`, emailLower);
-      localStorage.setItem(`delima_name_${user.uid}`, nameTrimmed);
+      localStorage.setItem(`delima_name_${user.uid}`, nameUpper);
     }
     setVerifiedEmail(emailLower);
-    setVerifiedName(nameTrimmed);
+    setVerifiedName(nameUpper);
   };
 
   if (loading) {
@@ -149,25 +145,25 @@ export default function StudentView({
           
           <div className="space-y-4 text-left mb-6">
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">E-mel Pelajar</label>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">E-mel Pelajar (Pilihan / Optional)</label>
               <input 
                 type="email"
                 value={delimaEmail}
                 onChange={(e) => setDelimaEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 font-mono text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Contoh: pelajar@gmail.com"
+                placeholder="Contoh: pelajar@gmail.com (Boleh dikosongkan)"
               />
-              <p className="text-[10px] text-slate-400 mt-1">Pastikan e-mel yang dimasukkan adalah sah.</p>
+              <p className="text-[10px] text-slate-400 mt-1">E-mel adalah pilihan. Boleh dikosongkan jika tiada.</p>
             </div>
             
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Nama Penuh Pelajar (Seperti dalam Classroom)</label>
+              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Nama Penuh Pelajar (Wajib / Huruf Besar)</label>
               <input 
                 type="text"
                 value={delimaName}
                 onChange={(e) => setDelimaName(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Masukkan nama penuh anda"
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none uppercase"
+                placeholder="MASUKKAN NAMA PENUH ANDA"
               />
             </div>
           </div>

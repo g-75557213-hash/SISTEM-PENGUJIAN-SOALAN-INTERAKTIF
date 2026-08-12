@@ -507,7 +507,11 @@ function doGet(e) {
       if (userEmail) userName = userEmail.split('@')[0].toUpperCase(); 
     }
     
-    // Jika bukan akaun DELIMa, pastikan nilai kosong untuk paksa Popup Manual Entry
+    // Jika bukan akaun DELIMa (tidak berakhir dengan moe-dl.edu.my), kosongkan untuk paksa Popup Manual Entry
+    if (userEmail && !userEmail.toLowerCase().endsWith("moe-dl.edu.my")) {
+      userEmail = "";
+      userName = "";
+    }
     userEmail = userEmail || "";
     userName = userName || "";
     
@@ -541,21 +545,20 @@ function doGet(e) {
       "       var popup = document.createElement('div');" +
       "       popup.id = 'delima-login-popup';" +
       "       popup.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(248,250,252,0.95);backdrop-filter:blur(5px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;box-sizing:border-box;';" +
-      "       popup.innerHTML = '<div style=\\\"background:white;padding:30px;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;\\\">' +" +
-      "         '<div style=\\\"font-size:40px;margin-bottom:15px;\\\">🎓</div>' +" +
-      "         '<h2 style=\\\"color:#1e293b;margin:0 0 10px 0;font-size:22px;\\\">Pengesahan Identiti</h2>' +" +
-      "         '<p style=\\\"color:#64748b;font-size:14px;margin-bottom:25px;line-height:1.5;\\\">Sila masukkan maklumat anda untuk membolehkan guru merekod markah.</p>' +" +
-      "         '<div style=\\\"text-align:left;margin-bottom:15px;\\\"><label style=\\\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;\\\">Nama Penuh</label><input type=\\\"text\\\" id=\\\"input-nama\\\" placeholder=\\\"Contoh: ABU BIN ALI\\\" style=\\\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;color:#000;font-weight:bold;\\\"></div>' +" +
-      "         '<div style=\\\"text-align:left;margin-bottom:25px;\\\"><label style=\\\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;\\\">E-mel (DELIMa atau Peribadi)</label><input type=\\\"email\\\" id=\\\"input-emel\\\" placeholder=\\\"Contoh: pelajar@gmail.com\\\" style=\\\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;font-family:monospace;box-sizing:border-box;outline:none;color:#000;font-weight:bold;\\\"><p style=\\\"font-size:11px;color:#94a3b8;margin-top:5px;\\\">Sila pastikan e-mel dimasukkan dengan betul</p></div>' +" +
-      "         '<button id=\\\"btn-mula\\\" style=\\\"width:100%;background:#2563eb;color:white;border:none;padding:14px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;transition:background 0.2s;\\\">Mula Menjawab</button>' +" +
-      "       '</div>';" +
+      "       popup.innerHTML = '<div style=\"background:white;padding:30px;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;\">' +" +
+      "         \'<div style=\"font-size:40px;margin-bottom:15px;\">🎓</div>\' +" +
+      "         \'<h2 style=\"color:#1e293b;margin:0 0 10px 0;font-size:22px;\">Pengesahan Identiti</h2>\' +" +
+      "         \'<p style=\"color:#64748b;font-size:14px;margin-bottom:25px;line-height:1.5;\">Sila masukkan maklumat anda untuk membolehkan guru merekod markah.</p>\' +" +
+      "         \'<div style=\"text-align:left;margin-bottom:15px;\"><label style=\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;\">Nama Penuh (Wajib / Huruf Besar)</label><input type=\"text\" id=\"input-nama\" placeholder=\"MASUKKAN NAMA PENUH ANDA\" style=\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;color:#000;font-weight:bold;text-transform:uppercase;\"></div>\' +" +
+      "         \'<div style=\"text-align:left;margin-bottom:25px;\"><label style=\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;\">E-mel (Pilihan)</label><input type=\"email\" id=\"input-emel\" placeholder=\"Contoh: pelajar@gmail.com (Boleh dikosongkan)\" style=\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;font-family:monospace;box-sizing:border-box;outline:none;color:#000;font-weight:bold;\"><p style=\"font-size:11px;color:#94a3b8;margin-top:5px;\">E-mel adalah pilihan. Boleh dikosongkan jika tiada.</p></div>\' +" +
+      "         \'<button id=\"btn-mula\" style=\"width:100%;background:#2563eb;color:white;border:none;padding:14px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;transition:background 0.2s;\">Mula Menjawab</button>\' +" +
+      "       \'</div>\';" +
       "       document.body.appendChild(popup);" +
-      "       document.getElementById('btn-mula').onclick = function() {" +
-      "         var nama = document.getElementById('input-nama').value.trim();" +
-      "         var emel = document.getElementById('input-emel').value.trim().toLowerCase();" +
-      "         if (!nama) { alert('Sila masukkan nama penuh anda.'); return; }" +
-      "         if (!emel) { alert('Sila masukkan e-mel anda.'); return; }" +
-      "         if (emel.indexOf('@') === -1) { alert('Sila masukkan e-mel yang sah.'); return; }" +
+      "       document.getElementById(\'btn-mula\').onclick = function() {" +
+      "         var nama = document.getElementById(\'input-nama\').value.trim().toUpperCase();" +
+      "         var emel = document.getElementById(\'input-emel\').value.trim().toLowerCase();" +
+      "         if (!nama) { alert(\'Sila masukkan nama penuh anda.\'); return; }" +
+      "         if (emel && emel.indexOf(\'@\') === -1) { alert(\'Sila masukkan e-mel yang sah.\'); return; }" +
       "         mulakanSesi(nama, emel);" +
       "       };" +
       "    } else {" +
