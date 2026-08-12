@@ -41,10 +41,14 @@ export default function StudentView({
       if (savedEmail) {
         setVerifiedEmail(savedEmail);
         setDelimaEmail(savedEmail);
+      } else {
+        setDelimaEmail(user.email || '');
       }
       if (savedName) {
         setVerifiedName(savedName);
         setDelimaName(savedName);
+      } else {
+        setDelimaName(user.displayName || '');
       }
     }
   }, [user]);
@@ -136,11 +140,11 @@ export default function StudentView({
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-50 p-4 overflow-y-auto">
         <div className="bg-white p-8 rounded-2xl shadow-md text-center max-w-md w-full border border-slate-200 my-4">
-          <div className="text-4xl mb-4">🔒</div>
-          <h2 className="text-xl font-bold mb-2 text-slate-800">Sahkan Identiti Anda</h2>
+          <div className="text-4xl mb-4">👤</div>
+          <h2 className="text-xl font-bold mb-2 text-slate-800">Profil Tetamu (Guest)</h2>
           <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-            Sistem mengesan anda log masuk dengan akaun peribadi (<span className="font-mono text-rose-600 font-bold">{user.email}</span>). 
-            Sila sahkan e-mel (DELIMa/Peribadi) dan nama penuh anda di bawah.
+            Anda menggunakan akaun peribadi (<span className="font-mono text-slate-600 font-bold">{user.email}</span>). 
+            Sila lengkapkan profil tetamu di bawah untuk membolehkan guru merekod markah anda.
           </p>
           
           <div className="space-y-4 text-left mb-6">
@@ -150,7 +154,7 @@ export default function StudentView({
                 type="email"
                 value={delimaEmail}
                 onChange={(e) => setDelimaEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 font-mono text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 font-mono text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 placeholder="Contoh: pelajar@gmail.com"
               />
               <p className="text-[10px] text-slate-400 mt-1">Pastikan e-mel yang dimasukkan adalah sah.</p>
@@ -162,7 +166,7 @@ export default function StudentView({
                 type="text"
                 value={delimaName}
                 onChange={(e) => setDelimaName(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 placeholder="Masukkan nama penuh anda"
               />
             </div>
@@ -173,7 +177,7 @@ export default function StudentView({
               onClick={handleVerifyDelima}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-sm shadow-sm"
             >
-              Sahkan & Mula Menjawab
+              Teruskan & Mula Menjawab
             </button>
             <button 
               onClick={logout}
