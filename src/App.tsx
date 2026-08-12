@@ -514,12 +514,12 @@ function doGet(e) {
     // Suntik skrip ke dalam HTML soalan (Dengan parameter kelas dan tugasan)
     const scriptToInject = 
       "<script>" +
-      "  window.USER_EMAIL = '" + userEmail + "';" +
-      "  window.USER_NAME = '" + userName + "';" +
-      "  window.QID = '" + qid + "';" +
-      "  window.KELAS = '" + kelas + "';" +
-      "  window.TUGASAN = '" + tugasan + "';" +
-      "  window.KOD = '" + kod + "';" +
+      "  window.USER_EMAIL = " + JSON.stringify(userEmail) + ";" +
+      "  window.USER_NAME = " + JSON.stringify(userName) + ";" +
+      "  window.QID = " + JSON.stringify(qid) + ";" +
+      "  window.KELAS = " + JSON.stringify(kelas) + ";" +
+      "  window.TUGASAN = " + JSON.stringify(tugasan) + ";" +
+      "  window.KOD = " + JSON.stringify(kod) + ";" +
       "  window.addEventListener('DOMContentLoaded', function() {" +
       "    function mulakanSesi(nama, emel) {" +
       "      window.USER_NAME = nama;" +
