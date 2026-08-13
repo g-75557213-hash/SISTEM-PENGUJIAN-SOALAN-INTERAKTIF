@@ -1656,7 +1656,13 @@ function syncClassroom() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Subjek</label>
                   <ColorfulSelect 
                     value={formData.subjek}
-                    onChange={(val) => setFormData(prev => ({...prev, subjek: val, bab: '', sp: ''}))}
+                    onChange={(val) => {
+                      if (val === 'Kaunseling') {
+                        setFormData(prev => ({...prev, subjek: val, bab: 'Tiada Standard Kandungan', sp: 'Tiada Standard Pembelajaran'}));
+                      } else {
+                        setFormData(prev => ({...prev, subjek: val, bab: '', sp: ''}));
+                      }
+                    }}
                     options={SENARAI_SUBJEK.map(s => ({label: s, value: s}))}
                     placeholder="Pilih Subjek"
                     required
@@ -1665,91 +1671,97 @@ function syncClassroom() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Bab</label>
-                <ColorfulSelect 
-                  value={formData.bab}
-                  onChange={(val) => setFormData(prev => ({...prev, bab: val, sp: ''}))}
-                  options={getSenaraiBab(formData.tingkatan, formData.subjek).map(b => ({label: b, value: b}))}
-                  placeholder="Pilih Bab"
-                  required
-                />
+                {formData.subjek !== 'Kaunseling' && <label className="block text-sm font-medium text-slate-700 mb-1">Bab</label>}
+                {formData.subjek !== 'Kaunseling' && (
+                  <ColorfulSelect 
+                    value={formData.bab}
+                    onChange={(val) => setFormData(prev => ({...prev, bab: val, sp: ''}))}
+                    options={getSenaraiBab(formData.tingkatan, formData.subjek).map(b => ({label: b, value: b}))}
+                    placeholder="Pilih Bab"
+                    required
+                  />
+                )}
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Standard Pembelajaran (SP)</label>
-                <div className="flex flex-col gap-2">
-                  <div className="w-full flex flex-wrap items-center gap-2 px-3 py-2 border border-slate-300 rounded-md focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white min-h-[42px]">
-                    {formData.sp.split(',').map(s => s.trim()).filter(Boolean).map(sp => (
-                      <span key={sp} className="flex items-center gap-1 bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-md font-medium">
-                        {sp}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
-                            setFormData(prev => ({...prev, sp: current.filter(s => s !== sp).join(', ')}))
-                          }}
-                          className="hover:bg-blue-200 text-blue-600 hover:text-blue-800 rounded-full p-0.5 ml-1 transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                      </span>
-                    ))}
-                    <input 
-                      type="text"
-                      className="flex-1 outline-none min-w-[120px] text-sm bg-transparent"
-                      placeholder={formData.sp ? "Tambah SP lagi (Tekan Enter)..." : "Contoh: 1.1.2, 1.1.3"}
-                      required={!formData.sp}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                          e.preventDefault();
-                          const val = e.currentTarget.value.trim().replace(/,$/, '');
-                          if (val) {
-                            const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
-                            if (!current.includes(val)) {
-                              setFormData(prev => ({...prev, sp: [...current, val].join(', ')}))
+                {formData.subjek !== 'Kaunseling' && (
+                  <>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Standard Pembelajaran (SP)</label>
+                    <div className="flex flex-col gap-2">
+                      <div className="w-full flex flex-wrap items-center gap-2 px-3 py-2 border border-slate-300 rounded-md focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white min-h-[42px]">
+                        {formData.sp.split(',').map(s => s.trim()).filter(Boolean).map(sp => (
+                          <span key={sp} className="flex items-center gap-1 bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-md font-medium">
+                            {sp}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
+                                setFormData(prev => ({...prev, sp: current.filter(s => s !== sp).join(', ')}))
+                              }}
+                              className="hover:bg-blue-200 text-blue-600 hover:text-blue-800 rounded-full p-0.5 ml-1 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                          </span>
+                        ))}
+                        <input 
+                          type="text"
+                          className="flex-1 outline-none min-w-[120px] text-sm bg-transparent"
+                          placeholder={formData.sp ? "Tambah SP lagi (Tekan Enter)..." : "Contoh: 1.1.2, 1.1.3"}
+                          required={!formData.sp}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim().replace(/,$/, '');
+                              if (val) {
+                                const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
+                                if (!current.includes(val)) {
+                                  setFormData(prev => ({...prev, sp: [...current, val].join(', ')}))
+                                }
+                                e.currentTarget.value = '';
+                              }
                             }
-                            e.currentTarget.value = '';
-                          }
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const val = e.target.value.trim().replace(/,$/, '');
-                        if (val) {
-                          const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
-                          if (!current.includes(val)) {
-                            setFormData(prev => ({...prev, sp: [...current, val].join(', ')}))
-                          }
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                  </div>
-                  {formData.bab && (
-                    <div className="flex flex-wrap gap-2 mt-1 p-3 bg-slate-50 border border-slate-200 rounded-md max-h-40 overflow-y-auto">
-                      <div className="w-full text-xs text-slate-500 mb-1 font-medium">Cadangan SP (Klik untuk tambah):</div>
-                      {generateSPOptions(formData.bab).map(sp => {
-                        const isSelected = formData.sp.split(',').map(s => s.trim()).includes(sp);
-                        if (isSelected) return null;
-                        return (
-                          <button
-                            key={sp}
-                            type="button"
-                            onClick={() => {
+                          }}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim().replace(/,$/, '');
+                            if (val) {
                               const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
-                              setFormData(prev => ({...prev, sp: [...current, sp].join(', ')}))
-                            }}
-                            className="px-2 py-1 text-xs rounded-md border font-medium transition-colors bg-white text-slate-600 border-slate-300 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 shadow-sm"
-                          >
-                            + {sp}
-                          </button>
-                        );
-                      })}
-                      {generateSPOptions(formData.bab).every(sp => formData.sp.split(',').map(s => s.trim()).includes(sp)) && (
-                        <div className="text-xs text-slate-400 italic">Semua cadangan SP telah dipilih.</div>
+                              if (!current.includes(val)) {
+                                setFormData(prev => ({...prev, sp: [...current, val].join(', ')}))
+                              }
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </div>
+                      {formData.bab && (
+                        <div className="flex flex-wrap gap-2 mt-1 p-3 bg-slate-50 border border-slate-200 rounded-md max-h-40 overflow-y-auto">
+                          <div className="w-full text-xs text-slate-500 mb-1 font-medium">Cadangan SP (Klik untuk tambah):</div>
+                          {generateSPOptions(formData.bab).map(sp => {
+                            const isSelected = formData.sp.split(',').map(s => s.trim()).includes(sp);
+                            if (isSelected) return null;
+                            return (
+                              <button
+                                key={sp}
+                                type="button"
+                                onClick={() => {
+                                  const current = formData.sp.split(',').map(s => s.trim()).filter(Boolean);
+                                  setFormData(prev => ({...prev, sp: [...current, sp].join(', ')}))
+                                }}
+                                className="px-2 py-1 text-xs rounded-md border font-medium transition-colors bg-white text-slate-600 border-slate-300 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 shadow-sm"
+                              >
+                                + {sp}
+                              </button>
+                            );
+                          })}
+                          {generateSPOptions(formData.bab).every(sp => formData.sp.split(',').map(s => s.trim()).includes(sp)) && (
+                            <div className="text-xs text-slate-400 italic">Semua cadangan SP telah dipilih.</div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
               
               <div className="mt-4 flex gap-3">
@@ -2044,7 +2056,7 @@ function syncClassroom() {
                   disabled={!editSubjek}
                 >
                   <option value="">Pilih Standard Kandungan</option>
-                  {getSenaraiBab(editSubjek).map(b => <option key={b} value={b}>{b}</option>)}
+                  {getSenaraiBab(editingQuestion.tingkatan, editSubjek).map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
               

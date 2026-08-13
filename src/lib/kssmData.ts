@@ -22,7 +22,8 @@ export const SENARAI_SUBJEK = [
   "Sains Komputer",
   "Grafik Komunikasi Teknikal (GKT)",
   "Pertanian",
-  "Sains Rumah Tangga (SRT)"
+  "Sains Rumah Tangga (SRT)",
+  "Kaunseling"
 ];
 
 export const KSSM_BAB: Record<string, Record<string, string[]>> = {
@@ -198,6 +199,7 @@ export const KSSM_BAB: Record<string, Record<string, string[]>> = {
 
 export const getSenaraiBab = (tingkatan: string, subjek: string): string[] => {
   if (!tingkatan || !subjek) return [];
+  if (subjek.toUpperCase() === "KAUNSELING") return ["Tiada Standard Kandungan"];
   if (KSSM_BAB[tingkatan] && KSSM_BAB[tingkatan][subjek]) {
     return KSSM_BAB[tingkatan][subjek];
   }
@@ -207,6 +209,7 @@ export const getSenaraiBab = (tingkatan: string, subjek: string): string[] => {
 
 export const generateSPOptions = (bab: string): string[] => {
   if (!bab) return [];
+  if (bab === "Tiada Standard Kandungan") return ["Tiada Standard Pembelajaran"];
   // Ekstrak nombor bab daripada string "Bab X: ..."
   const match = bab.match(/Bab (\d+)/i);
   if (!match) return [];
