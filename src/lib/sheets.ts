@@ -975,3 +975,124 @@ export async function getSimulasiFromSheets(token: string, spreadsheetIdInput?: 
     return [];
   }
 }
+
+
+export async function deleteQuestionFromSheets(
+  token: string,
+  spreadsheetId: string,
+  idSoalan: string
+): Promise<boolean> {
+  try {
+    const sheetName = await getFirstSheetName(token, spreadsheetId);
+    
+    // 1. Get all rows to find the index
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:H`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!res.ok) return false;
+    
+    const data = await res.json();
+    const rows = data.values || [];
+    let rowIndexToDelete = -1;
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][7] === idSoalan) { // Index 7 is idSoalan
+        rowIndexToDelete = i;
+        break;
+      }
+    }
+    
+    if (rowIndexToDelete === -1) return false;
+    
+    // 2. Get sheetId for the sheetName
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties(title,sheetId)`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const metaData = await metaRes.json();
+    const sheetId = metaData.sheets.find((s: any) => s.properties.title === sheetName)?.properties.sheetId;
+    
+    if (sheetId === undefined) return false;
+    
+    // 3. Delete the row
+    const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: "ROWS",
+                startIndex: rowIndexToDelete,
+                endIndex: rowIndexToDelete + 1
+              }
+            }
+          }
+        ]
+      })
+    });
+    
+    return batchRes.ok;
+  } catch (err) {
+    console.error("Error deleting question:", err);
+    return false;
+  }
+}
+
+export async function updateQuestionMetaInSheets(
+  token: string,
+  spreadsheetId: string,
+  idSoalan: string,
+  subjek: string,
+  bab: string,
+  sp: string
+): Promise<boolean> {
+  try {
+    const sheetName = await getFirstSheetName(token, spreadsheetId);
+    
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:H`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!res.ok) return false;
+    
+    const data = await res.json();
+    const rows = data.values || [];
+    let rowIndexToUpdate = -1;
+    
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][7] === idSoalan) { // Index 7 is idSoalan
+        rowIndexToUpdate = i + 1; // 1-indexed for A1 notation
+        break;
+      }
+    }
+    
+    if (rowIndexToUpdate === -1) return false;
+    
+    // Update D, E, F columns (Subjek, Bab, SP) -> Index 3, 4, 5
+    const range = `${sheetName}!D${rowIndexToUpdate}:F${rowIndexToUpdate}`;
+    
+    const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: [
+          [subjek, bab, sp]
+        ]
+      })
+    });
+    
+    return updateRes.ok;
+  } catch (err) {
+    console.error("Error updating question:", err);
+    return false;
+  }
+}

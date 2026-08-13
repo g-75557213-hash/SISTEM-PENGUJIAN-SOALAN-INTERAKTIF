@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, AlertCircle, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube } from 'lucide-react';
 import { initAuth, googleSignIn, logout, getAccessToken } from './lib/firebase';
 import { User } from 'firebase/auth';
-import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData } from './lib/sheets';
+import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets } from './lib/sheets';
 import { SENARAI_SUBJEK, getSenaraiBab, generateSPOptions } from './lib/kssmData';
 import { getClasses, createAssignment, GCClass } from './lib/classroom';
 import { uploadFileToDrive } from './lib/drive';
@@ -69,6 +69,12 @@ export default function App() {
 
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [isSemakanModalOpen, setIsSemakanModalOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<SoalanData | null>(null);
+  const [editSubjek, setEditSubjek] = useState('');
+  const [editBab, setEditBab] = useState('');
+  const [editSP, setEditSP] = useState('');
   
   const [formData, setFormData] = useState({
     namaGuru: '',
@@ -1901,6 +1907,194 @@ function syncClassroom() {
         </div>
       )}
 
+      {isSemakanModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col relative max-h-[95vh] h-full">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-purple-600" />
+                <h2 className="text-lg font-bold text-slate-800">Mod Semakan Soalan</h2>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsSemakanModalOpen(false);
+                  setEditingQuestion(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-full hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {questions.map((q, idx) => (
+                  <div key={q.idSoalan || idx} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">{q.subjek}</span>
+                        <h3 className="text-sm font-bold text-slate-800 mt-1 line-clamp-2" title={q.bab}>{q.bab}</h3>
+                      </div>
+                      <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-1 rounded font-mono shrink-0">{q.idSoalan}</span>
+                    </div>
+                    
+                    <div className="p-4 flex-1">
+                      <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed mb-3">{q.sp}</p>
+                      <div className="text-[10px] text-slate-400 flex flex-col gap-1">
+                        <div><span className="font-semibold text-slate-500">Guru:</span> {q.namaGuru}</div>
+                        <div><span className="font-semibold text-slate-500">Ting:</span> {q.tingkatan}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 border-t border-slate-100 bg-slate-50 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => window.open(q.linkSoalan, '_blank')}
+                        className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold py-2 px-2 rounded-lg transition flex items-center justify-center gap-1.5"
+                      >
+                        <Play className="w-3.5 h-3.5" /> Cuba Jawab
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingQuestion(q);
+                          setEditSubjek(q.subjek);
+                          setEditBab(q.bab);
+                          setEditSP(q.sp);
+                        }}
+                        className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 text-xs font-bold py-2 px-2 rounded-lg transition flex items-center justify-center gap-1.5"
+                      >
+                        <Settings className="w-3.5 h-3.5" /> Edit Info
+                      </button>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(q.html);
+                          alert('Kod HTML Soalan telah disalin ke clipboard.');
+                        }}
+                        className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs font-bold py-2 px-2 rounded-lg transition flex items-center justify-center gap-1.5"
+                      >
+                        <Code className="w-3.5 h-3.5" /> Copy HTML
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('Anda pasti mahu memadam soalan ini secara kekal? Tindakan ini tidak boleh diundur.')) {
+                            if (token) {
+                              try {
+                                const ok = await deleteQuestionFromSheets(token, spreadsheetId, q.idSoalan);
+                                if (ok) {
+                                  alert('Soalan berjaya dipadam.');
+                                  loadData(token, spreadsheetId);
+                                } else {
+                                  alert('Gagal memadam soalan.');
+                                }
+                              } catch (e) {
+                                alert('Ralat semasa memadam soalan.');
+                              }
+                            }
+                          }
+                        }}
+                        className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-bold py-2 px-2 rounded-lg transition flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Padam
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                {questions.length === 0 && (
+                  <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                    <BookOpen className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="font-medium">Tiada soalan interaktif setakat ini.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {editingQuestion && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800">Kemaskini Info Soalan</h3>
+              <button 
+                onClick={() => setEditingQuestion(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold"
+              >✕</button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Subjek</label>
+                <select 
+                  value={editSubjek}
+                  onChange={(e) => setEditSubjek(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="">Pilih Subjek</option>
+                  {SENARAI_SUBJEK.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Standard Kandungan</label>
+                <select 
+                  value={editBab}
+                  onChange={(e) => setEditBab(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  disabled={!editSubjek}
+                >
+                  <option value="">Pilih Standard Kandungan</option>
+                  {getSenaraiBab(editSubjek).map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Standard Pembelajaran</label>
+                <select 
+                  value={editSP}
+                  onChange={(e) => setEditSP(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  disabled={!editBab}
+                >
+                  <option value="">Pilih Standard Pembelajaran</option>
+                  {generateSPOptions(editBab).map(sp => <option key={sp} value={sp}>{sp}</option>)}
+                </select>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button 
+                onClick={() => setEditingQuestion(null)}
+                className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={async () => {
+                  if (token && editingQuestion) {
+                    try {
+                      const ok = await updateQuestionMetaInSheets(token, spreadsheetId, editingQuestion.idSoalan, editSubjek, editBab, editSP);
+                      if (ok) {
+                        alert('Info berjaya dikemaskini.');
+                        setEditingQuestion(null);
+                        loadData(token, spreadsheetId);
+                      } else {
+                        alert('Gagal mengemaskini info soalan.');
+                      }
+                    } catch (e) {
+                      alert('Ralat semasa mengemaskini.');
+                    }
+                  }
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                Simpan Perubahan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isAdminModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col relative max-h-[90vh]">
@@ -1929,6 +2123,20 @@ function syncClassroom() {
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition shrink-0 self-stretch md:self-auto text-center"
                 >
                   Buka Spreadsheet ↗
+                </button>
+              </div>
+
+              {/* Semakan Soalan Button */}
+              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-purple-900 text-sm">Semakan & Penyelenggaraan Soalan</h3>
+                  <p className="text-xs text-purple-700 mt-1">Uji, lihat, edit, atau padam soalan interaktif yang telah dihasilkan.</p>
+                </div>
+                <button
+                  onClick={() => setIsSemakanModalOpen(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition shrink-0 self-stretch md:self-auto text-center"
+                >
+                  Buka Mod Semakan ↗
                 </button>
               </div>
 
