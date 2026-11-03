@@ -182,8 +182,34 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
   app.post("/api/submit-score", async (req, res) => {
     try {
-      const { qid, status, markah, email, nama, sijilBase64 } = req.body;
+      const { qid, status, markah, email, nama, sijilBase64, isUmum, kod, kelas } = req.body;
       
+      // For Tugasan Umum (tanpa GC), email is optional, but nama and (qid or kod) are required
+      if (isUmum || kod) {
+        if (!nama || (!qid && !kod)) {
+          return res.status(400).json({ error: "Missing required fields (nama, qid or kod)" });
+        }
+        const safeNama = encodeURIComponent(String(nama).trim().toUpperCase());
+        const safeKod = kod ? String(kod).trim().toUpperCase() : (qid || 'UMUM');
+        const docId = `umum_${safeKod}_${safeNama}`;
+        const submissionRef = db.collection('submissions').doc(docId);
+
+        await submissionRef.set({
+          qid: qid || '',
+          kod: kod || '',
+          kelas: kelas || '',
+          nama: String(nama).trim().toUpperCase(),
+          status: status || 'Selesai',
+          markah: markah !== undefined && markah !== null ? Number(markah) : null,
+          email: email || '',
+          sijilBase64: sijilBase64 || null,
+          isUmum: true,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        return res.json({ success: true, message: "Markah tugasan umum berjaya disimpan" });
+      }
+
       if (!qid || !email) {
         return res.status(400).json({ error: "Missing required fields (qid, email)" });
       }
@@ -192,17 +218,130 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
       
       await submissionRef.set({
         qid,
-        status,
+        status: status || 'Selesai',
         markah: markah !== undefined && markah !== null ? Number(markah) : null,
         email,
-        nama,
+        nama: nama || '',
         sijilBase64: sijilBase64 || null,
+        isUmum: false,
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
       res.json({ success: true, message: "Markah berjaya disimpan" });
     } catch (error) {
       console.error("Error submitting score:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Endpoints for Tugasan Umum (Public Assignments)
+  app.post("/api/tugasan-umum", async (req, res) => {
+    try {
+      const { kod, qid, soalanTajuk, tingkatan, subjek, bab, kelas, guruEmail, guruNama } = req.body;
+      if (!kod || !qid || !kelas) {
+        return res.status(400).json({ error: "Missing required fields (kod, qid, kelas)" });
+      }
+
+      const docRef = db.collection("tugasan_umum").doc(kod.toUpperCase().trim());
+      await docRef.set({
+        kod: kod.toUpperCase().trim(),
+        qid,
+        soalanTajuk: soalanTajuk || bab || '',
+        tingkatan: tingkatan || '',
+        subjek: subjek || '',
+        bab: bab || '',
+        kelas: kelas.trim(),
+        guruEmail: guruEmail || '',
+        guruNama: guruNama || '',
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      res.json({ success: true, message: "Tugasan umum berjaya dicipta", kod: kod.toUpperCase().trim() });
+    } catch (error) {
+      console.error("Error creating tugasan umum:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/tugasan-umum", async (req, res) => {
+    try {
+      const { guruEmail, qid } = req.query;
+      let queryRef: any = db.collection("tugasan_umum");
+      
+      if (guruEmail) {
+        queryRef = queryRef.where("guruEmail", "==", guruEmail);
+      }
+      if (qid) {
+        queryRef = queryRef.where("qid", "==", qid);
+      }
+
+      const snapshot = await queryRef.get();
+      const list: any[] = [];
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        let createdAtStr = "";
+        if (data.createdAt) {
+          try {
+            createdAtStr = typeof data.createdAt.toDate === 'function'
+              ? data.createdAt.toDate().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+              : new Date(data.createdAt).toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' });
+          } catch (e) {
+            createdAtStr = String(data.createdAt);
+          }
+        }
+        list.push({ ...data, createdAt: createdAtStr });
+      });
+
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching tugasan umum:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/tugasan-umum/:kod", async (req, res) => {
+    try {
+      const { kod } = req.params;
+      if (!kod) return res.status(400).json({ error: "Missing kod" });
+      await db.collection("tugasan_umum").doc(kod.toUpperCase().trim()).delete();
+      res.json({ success: true, message: "Tugasan umum berjaya dipadam" });
+    } catch (error) {
+      console.error("Error deleting tugasan umum:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/tugasan-umum-submissions", async (req, res) => {
+    try {
+      const { kod, qid } = req.query;
+      let queryRef: any = db.collection("submissions").where("isUmum", "==", true);
+      
+      if (kod) {
+        queryRef = queryRef.where("kod", "==", String(kod).toUpperCase().trim());
+      } else if (qid) {
+        queryRef = queryRef.where("qid", "==", String(qid));
+      }
+
+      const snapshot = await queryRef.get();
+      const list: any[] = [];
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        let updatedAtStr = "";
+        if (data.updatedAt) {
+          try {
+            updatedAtStr = typeof data.updatedAt.toDate === 'function'
+              ? data.updatedAt.toDate().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+              : new Date(data.updatedAt).toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' });
+          } catch (e) {
+            updatedAtStr = String(data.updatedAt);
+          }
+        }
+        list.push({ ...data, updatedAt: updatedAtStr });
+      });
+
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching tugasan umum submissions:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

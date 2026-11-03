@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission } from '../lib/classroom';
-import { CheckCircle, RotateCcw } from 'lucide-react';
+import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check } from 'lucide-react';
 import { SoalanData } from '../lib/sheets';
 import { logout } from '../lib/firebase';
 
@@ -38,6 +38,133 @@ export default function SemakanGuru({
   const [studentSearch, setStudentSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'score'>('name');
+
+  // Navigation tab for Semakan Guru
+  const [activeSemakanTab, setActiveSemakanTab] = useState<'classroom' | 'umum'>('classroom');
+
+  // Tugasan Umum state
+  const [tugasanUmumList, setTugasanUmumList] = useState<any[]>([]);
+  const [tugasanUmumSubs, setTugasanUmumSubs] = useState<any[]>([]);
+  const [loadingUmum, setLoadingUmum] = useState(false);
+  const [filterUmumKod, setFilterUmumKod] = useState<string>('all');
+  const [filterUmumKelas, setFilterUmumKelas] = useState<string>('all');
+  const [searchUmumStudent, setSearchUmumStudent] = useState<string>('');
+  const [copiedUmumMarks, setCopiedUmumMarks] = useState(false);
+
+  const loadTugasanUmumData = async () => {
+    try {
+      setLoadingUmum(true);
+      const urlAssignments = user?.email ? `/api/tugasan-umum?guruEmail=${encodeURIComponent(user.email)}` : '/api/tugasan-umum';
+      const resAssignments = await fetch(urlAssignments);
+      if (resAssignments.ok) {
+        const dataA = await resAssignments.json();
+        setTugasanUmumList(dataA);
+      }
+      
+      const resSubs = await fetch('/api/tugasan-umum-submissions');
+      if (resSubs.ok) {
+        const dataS = await resSubs.json();
+        setTugasanUmumSubs(dataS);
+      }
+    } catch (err) {
+      console.error("Gagal memuat turun data Tugasan Umum:", err);
+    } finally {
+      setLoadingUmum(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSemakanTab === 'umum') {
+      loadTugasanUmumData();
+    }
+  }, [activeSemakanTab, user]);
+
+  const uniqueUmumClasses = useMemo(() => {
+    const set = new Set<string>();
+    tugasanUmumList.forEach(t => { if (t.kelas) set.add(t.kelas); });
+    tugasanUmumSubs.forEach(s => { if (s.kelas) set.add(s.kelas); });
+    return Array.from(set).sort();
+  }, [tugasanUmumList, tugasanUmumSubs]);
+
+  const filteredUmumSubmissions = useMemo(() => {
+    return tugasanUmumSubs.filter(sub => {
+      const matchKod = filterUmumKod === 'all' ? true : sub.kod === filterUmumKod;
+      const matchKelas = filterUmumKelas === 'all' ? true : sub.kelas?.toLowerCase() === filterUmumKelas.toLowerCase();
+      const matchSearch = searchUmumStudent.trim() 
+        ? (sub.nama?.toLowerCase().includes(searchUmumStudent.toLowerCase()) || sub.kelas?.toLowerCase().includes(searchUmumStudent.toLowerCase()))
+        : true;
+      return matchKod && matchKelas && matchSearch;
+    });
+  }, [tugasanUmumSubs, filterUmumKod, filterUmumKelas, searchUmumStudent]);
+
+  const handleExportUmumCSV = () => {
+    if (filteredUmumSubmissions.length === 0) {
+      alert("Tiada rekod murid untuk dieksport.");
+      return;
+    }
+    const headers = ["Bil", "Nama Pelajar", "Kelas", "Kod Tugasan", "Tajuk Soalan / Bab", "Markah (%)", "Status", "Tarikh & Masa"];
+    const rows = filteredUmumSubmissions.map((s, idx) => {
+      const assn = tugasanUmumList.find(a => a.kod === s.kod);
+      const tajuk = assn ? `${assn.subjek} - ${assn.bab}` : (s.qid || '-');
+      return [
+        idx + 1,
+        `"${(s.nama || '').replace(/"/g, '""')}"`,
+        `"${(s.kelas || '').replace(/"/g, '""')}"`,
+        `"${s.kod || ''}"`,
+        `"${tajuk.replace(/"/g, '""')}"`,
+        s.markah !== null && s.markah !== undefined ? s.markah : 0,
+        `"${s.status || 'Selesai'}"`,
+        `"${s.updatedAt || ''}"`
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Markah_Tugasan_Umum_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCopyUmumMarksText = () => {
+    if (filteredUmumSubmissions.length === 0) {
+      alert("Tiada rekod murid untuk disalin.");
+      return;
+    }
+
+    let text = `SENARAI MARKAH TUGASAN UMUM\n`;
+    text += `Tarikh Cetak: ${new Date().toLocaleDateString('ms-MY')}\n`;
+    text += `Jumlah Murid: ${filteredUmumSubmissions.length}\n`;
+    text += `=========================================\n`;
+    text += `BIL | NAMA MURID | KELAS | MARKAH (%)\n`;
+    text += `-----------------------------------------\n`;
+    filteredUmumSubmissions.forEach((s, idx) => {
+      text += `${idx + 1}. ${s.nama} | ${s.kelas} | ${s.markah ?? 0}%\n`;
+    });
+
+    navigator.clipboard.writeText(text);
+    setCopiedUmumMarks(true);
+    setTimeout(() => setCopiedUmumMarks(false), 2500);
+  };
+
+  const handleDeleteUmumAssignment = async (kod: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Adakah anda pasti mahu memadam tugasan umum dengan kod ${kod}?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/tugasan-umum/${encodeURIComponent(kod)}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert("Tugasan umum berjaya dipadam.");
+        loadTugasanUmumData();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Gagal memadam tugasan umum.");
+    }
+  };
 
   const waygroundMatches = useMemo(() => {
     if (!selectedAssignment || !selectedClass) return {};
@@ -677,18 +804,324 @@ export default function SemakanGuru({
 
   return (
     <div className="flex flex-col h-full max-w-[1400px] mx-auto w-full bg-slate-50">
-      <div className="bg-white p-4 sm:p-6 border-b border-slate-200 shadow-sm shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BookOpenIcon />
-          <h2 className="text-xl font-bold text-slate-800">Semakan Tugasan Google Classroom</h2>
+      {/* TOP HEADER & TAB SWITCHER */}
+      <div className="bg-white p-4 sm:p-5 border-b border-slate-200 shadow-xs shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start sm:self-auto">
+          <button
+            onClick={() => setActiveSemakanTab('classroom')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 transition cursor-pointer ${
+              activeSemakanTab === 'classroom'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <BookOpenIcon />
+            <span>Tugasan Google Classroom</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSemakanTab('umum')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold flex items-center gap-2 transition cursor-pointer ${
+              activeSemakanTab === 'umum'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Tugasan Umum (Tanpa Classroom)</span>
+          </button>
         </div>
-        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-full py-1.5 px-1.5 pr-4 shadow-sm">
+
+        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-full py-1.5 px-2 pr-4 shadow-xs self-end sm:self-auto">
           <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} alt="Profile" className="w-7 h-7 rounded-full" />
-          <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide truncate max-w-[150px] sm:max-w-none">{user.displayName} KPM-Guru</span>
+          <span className="text-xs sm:text-sm font-semibold text-slate-700 uppercase tracking-wide truncate max-w-[150px] sm:max-w-none">{user.displayName} KPM-Guru</span>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row flex-1 p-4 sm:p-6 gap-4 sm:gap-6 min-h-0 overflow-hidden">
+      {activeSemakanTab === 'umum' ? (
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-5">
+          {/* STATS OVERVIEW */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
+                👥
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Murid Menjawab</div>
+                <div className="text-2xl font-black text-slate-800">{filteredUmumSubmissions.length}</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
+                📊
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Purata Markah</div>
+                <div className="text-2xl font-black text-emerald-600">
+                  {filteredUmumSubmissions.length > 0 
+                    ? Math.round(filteredUmumSubmissions.reduce((acc, s) => acc + (s.markah || 0), 0) / filteredUmumSubmissions.length) 
+                    : 0}%
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">
+                📁
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tugasan Dicipta</div>
+                <div className="text-2xl font-black text-slate-800">{tugasanUmumList.length}</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
+                🎯
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Lulus (&ge;40%)</div>
+                <div className="text-2xl font-black text-amber-600">
+                  {filteredUmumSubmissions.filter(s => (s.markah || 0) >= 40).length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CONTROLS & FILTER BAR */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2.5 flex-1">
+              {/* Filter Kod */}
+              <select
+                value={filterUmumKod}
+                onChange={(e) => setFilterUmumKod(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Semua Kod Tugasan ({tugasanUmumList.length})</option>
+                {tugasanUmumList.map(t => (
+                  <option key={t.kod} value={t.kod}>
+                    {t.kod} - {t.kelas} ({t.subjek} • {t.bab})
+                  </option>
+                ))}
+              </select>
+
+              {/* Filter Kelas */}
+              <select
+                value={filterUmumKelas}
+                onChange={(e) => setFilterUmumKelas(e.target.value)}
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Semua Kelas</option>
+                {uniqueUmumClasses.map(k => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text"
+                  value={searchUmumStudent}
+                  onChange={(e) => setSearchUmumStudent(e.target.value)}
+                  placeholder="Cari nama pelajar / kelas..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={loadTugasanUmumData}
+                disabled={loadingUmum}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+                title="Segerak semula rekod"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingUmum ? 'animate-spin' : ''}`} />
+                <span>Segerak</span>
+              </button>
+
+              <button
+                onClick={handleCopyUmumMarksText}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{copiedUmumMarks ? '✓ Disalin' : 'Salin Markah'}</span>
+              </button>
+
+              <button
+                onClick={handleExportUmumCSV}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Eksport CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* SUBMISSIONS TABLE */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+              <div className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                <span>📋</span> Senarai Markah Tugasan Umum ({filteredUmumSubmissions.length})
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Direkod secara terus tanpa login DELIMa / Google Classroom
+              </div>
+            </div>
+
+            {loadingUmum ? (
+              <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-2">
+                <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Memuat turun data markah...</span>
+              </div>
+            ) : filteredUmumSubmissions.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <div className="text-3xl mb-2">📭</div>
+                <div className="font-bold text-slate-700 text-base">Tiada Rekod Pelajar Dijumpai</div>
+                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
+                  Belum ada murid yang menghantar jawapan untuk penapis ini. Kongsikan <span className="font-bold text-slate-600">Link Tugasan Umum</span> dari Bank Soalan kepada murid untuk mula merekod markah.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-4 w-12 text-center">#</th>
+                      <th className="py-3 px-4">Nama Penuh Pelajar</th>
+                      <th className="py-3 px-4">Kelas</th>
+                      <th className="py-3 px-4">Kod Tugasan</th>
+                      <th className="py-3 px-4">Tajuk / Topik Soalan</th>
+                      <th className="py-3 px-4 text-center">Markah (%)</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Tarikh & Masa</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredUmumSubmissions.map((sub, idx) => {
+                      const assn = tugasanUmumList.find(a => a.kod === sub.kod);
+                      const mark = sub.markah !== null && sub.markah !== undefined ? Number(sub.markah) : null;
+                      
+                      let markColor = "bg-slate-100 text-slate-700 border-slate-200";
+                      let markLabel = "-";
+                      if (mark !== null) {
+                        if (mark >= 80) markColor = "bg-emerald-100 text-emerald-800 border-emerald-300 font-black";
+                        else if (mark >= 60) markColor = "bg-blue-100 text-blue-800 border-blue-300 font-bold";
+                        else if (mark >= 40) markColor = "bg-amber-100 text-amber-800 border-amber-300 font-bold";
+                        else markColor = "bg-red-100 text-red-800 border-red-300 font-bold";
+                        markLabel = `${mark}%`;
+                      }
+
+                      return (
+                        <tr key={sub.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4 text-center text-slate-400 font-mono font-medium">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3.5 px-4 font-black text-slate-900 uppercase tracking-wide">
+                            {sub.nama}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded-lg border border-slate-200 text-[11px]">
+                              {sub.kelas || '-'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold text-[11px]">
+                              {sub.kod || '-'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate" title={assn?.bab || sub.qid}>
+                            {assn ? `${assn.subjek} - ${assn.bab}` : (sub.qid || '-')}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs border ${markColor}`}>
+                              {markLabel}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                              <Check className="w-3 h-3" /> Selesai
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[11px]">
+                            {sub.updatedAt || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* CREATED ASSIGNMENT MANAGEMENT SECTION */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+            <h3 className="font-extrabold text-sm text-slate-800 mb-3 flex items-center gap-2">
+              <span>🔗</span> Pautan Tugasan Umum Sedia Ada ({tugasanUmumList.length})
+            </h3>
+            {tugasanUmumList.length === 0 ? (
+              <p className="text-xs text-slate-400">Tiada tugasan umum dicipta lagi. Pergi ke tab <span className="font-bold text-slate-600">Tugasan</span> di atas untuk menjana pautan umum.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {tugasanUmumList.map(t => {
+                  const studentUrl = `${window.location.origin}/?qid=${t.qid}&kod=${encodeURIComponent(t.kod)}&kelas=${encodeURIComponent(t.kelas)}&mod=umum`;
+                  const subCount = tugasanUmumSubs.filter(s => s.kod === t.kod).length;
+
+                  return (
+                    <div key={t.kod} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-emerald-300 transition-all">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-mono text-xs font-black bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-200">
+                            {t.kod}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {subCount} Murid
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-800 text-xs line-clamp-1">{t.kelas}</div>
+                        <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{t.subjek} • {t.bab}</div>
+                      </div>
+
+                      <div className="flex gap-2 mt-3 pt-2.5 border-t border-slate-200">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(studentUrl);
+                            alert(`Pautan murid untuk kelas ${t.kelas} berjaya disalin!`);
+                          }}
+                          className="flex-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Salin Link</span>
+                        </button>
+                        <a
+                          href={studentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 py-1.5 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center transition"
+                          title="Buka pautan murid"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <button
+                          onClick={(e) => handleDeleteUmumAssignment(t.kod, e)}
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition"
+                          title="Padam kod tugasan ini"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col md:flex-row flex-1 p-4 sm:p-6 gap-4 sm:gap-6 min-h-0 overflow-hidden">
         
         {/* 1. Pilih Kelas */}
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
@@ -1265,6 +1698,7 @@ export default function SemakanGuru({
         </div>
 
       </div>
+      )}
     </div>
   );
 }

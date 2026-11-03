@@ -30,13 +30,24 @@ export default function App() {
     return localStorage.getItem('smkj_drive_folder_link') || '';
   });
 
+  const [kodParam, setKodParam] = useState<string | null>(null);
+  const [kelasParam, setKelasParam] = useState<string | null>(null);
+  const [modParam, setModParam] = useState<string | null>(null);
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const qid = urlParams.get('qid');
+    const kod = urlParams.get('kod');
+    const kelas = urlParams.get('kelas');
+    const mod = urlParams.get('mod');
     const sheetId = urlParams.get('spreadsheetId');
     const gasUrl = urlParams.get('gasWebAppUrl');
 
     setQidParams(qid);
+    setKodParam(kod);
+    setKelasParam(kelas);
+    setModParam(mod);
+
     if (sheetId) {
       setSpreadsheetIdParam(sheetId);
       setSpreadsheetId(sheetId);
@@ -1093,6 +1104,19 @@ function syncClassroom() {
     setSimulasiList(sims);
     return res;
   };
+
+  if (qidParams || kodParam) {
+    return (
+      <StudentView
+        qid={qidParams || ''}
+        kod={kodParam}
+        kelasParam={kelasParam}
+        modParam={modParam}
+        spreadsheetId={spreadsheetIdParam || spreadsheetId}
+        gasWebAppUrl={gasWebAppUrlParam || gasWebAppUrl}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans flex flex-col">

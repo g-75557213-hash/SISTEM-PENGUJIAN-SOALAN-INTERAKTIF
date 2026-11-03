@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter } from 'lucide-react';
+import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
 import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
@@ -50,6 +50,91 @@ export default function BankSoalan({
   const [loadingMulti, setLoadingMulti] = useState(false);
 
   const [waPopupQ, setWaPopupQ] = useState<{ q: SoalanData; status: any } | null>(null);
+
+  // Tugasan Umum (Tanpa Google Classroom) states
+  const [showPublicModal, setShowPublicModal] = useState(false);
+  const [publicModalQ, setPublicModalQ] = useState<SoalanData | null>(null);
+  const [publicKelasInput, setPublicKelasInput] = useState('');
+  const [publicGeneratedKod, setPublicGeneratedKod] = useState('');
+  const [publicGeneratedLink, setPublicGeneratedLink] = useState('');
+  const [publicExistingList, setPublicExistingList] = useState<any[]>([]);
+  const [isLoadingPublic, setIsLoadingPublic] = useState(false);
+  const [copiedPublicLink, setCopiedPublicLink] = useState(false);
+  const [copiedPublicWa, setCopiedPublicWa] = useState(false);
+
+  const handleOpenPublicModal = async (q: SoalanData) => {
+    setPublicModalQ(q);
+    setPublicKelasInput('');
+    setCopiedPublicLink(false);
+    setCopiedPublicWa(false);
+    const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const defaultKod = `TU-${randomSuffix}`;
+    setPublicGeneratedKod(defaultKod);
+    setPublicGeneratedLink('');
+    setShowPublicModal(true);
+
+    try {
+      setIsLoadingPublic(true);
+      const res = await fetch(`/api/tugasan-umum?qid=${q.idSoalan}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPublicExistingList(data);
+      }
+    } catch (err) {
+      console.error("Gagal memuat turun senarai tugasan umum:", err);
+    } finally {
+      setIsLoadingPublic(false);
+    }
+  };
+
+  const handleCreatePublicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!publicModalQ || !publicKelasInput.trim()) {
+      alert("Sila masukkan Nama Kelas.");
+      return;
+    }
+
+    const finalKod = publicGeneratedKod.trim().toUpperCase() || `TU-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const finalKelas = publicKelasInput.trim();
+
+    try {
+      setIsLoadingPublic(true);
+      const res = await fetch('/api/tugasan-umum', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kod: finalKod,
+          qid: publicModalQ.idSoalan,
+          soalanTajuk: publicModalQ.bab,
+          tingkatan: publicModalQ.tingkatan,
+          subjek: publicModalQ.subjek,
+          bab: publicModalQ.bab,
+          kelas: finalKelas,
+          guruEmail: user?.email || '',
+          guruNama: user?.displayName || ''
+        })
+      });
+
+      if (res.ok) {
+        const generatedUrl = `${window.location.origin}/?qid=${publicModalQ.idSoalan}&kod=${encodeURIComponent(finalKod)}&kelas=${encodeURIComponent(finalKelas)}&mod=umum`;
+        setPublicGeneratedLink(generatedUrl);
+        
+        // Refresh list
+        const listRes = await fetch(`/api/tugasan-umum?qid=${publicModalQ.idSoalan}`);
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          setPublicExistingList(listData);
+        }
+      } else {
+        alert("Gagal mencipta pautan tugasan umum.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ralat sambungan ke pelayan.");
+    } finally {
+      setIsLoadingPublic(false);
+    }
+  };
 
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
@@ -453,6 +538,13 @@ export default function BankSoalan({
                               Pratonton Soalan
                             </button>
                             <button 
+                              onClick={() => handleOpenPublicModal(q)}
+                              className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
+                            >
+                              <Globe className="w-3.5 h-3.5 mr-1.5" />
+                              Link Tugasan Umum (Tanpa GC)
+                            </button>
+                            <button 
                               onClick={() => openSendModal(q)}
                               disabled={loadingQ[q.idSoalan]}
                               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm"
@@ -510,6 +602,13 @@ export default function BankSoalan({
                               </div>
                             )}
 
+                            <button 
+                              onClick={() => handleOpenPublicModal(q)}
+                              className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
+                            >
+                              <Globe className="w-3.5 h-3.5 mr-1.5" />
+                              Link Tugasan Umum (Tanpa GC)
+                            </button>
                             <button 
                               onClick={() => openSendModal(q)}
                               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm"
@@ -792,6 +891,232 @@ export default function BankSoalan({
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TUGASAN UMUM (TANPA GOOGLE CLASSROOM) */}
+      {showPublicModal && publicModalQ && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col my-8 border border-slate-200">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 p-5 text-white flex justify-between items-start">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center text-white text-xl">
+                  🌐
+                </div>
+                <div>
+                  <h3 className="text-lg font-black leading-tight">Link Tugasan Umum (Tanpa Classroom)</h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    Pelajar hanya perlu isi <span className="font-bold underline">Nama Penuh</span> & <span className="font-bold underline">Kelas</span> sahaja untuk menjawab.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPublicModal(false)}
+                className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Question Summary */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">
+                  {publicModalQ.tingkatan} • {publicModalQ.subjek}
+                </div>
+                <h4 className="font-extrabold text-slate-800 text-sm leading-snug">
+                  {publicModalQ.bab}
+                </h4>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  ID Soalan: <span className="font-mono text-slate-700 font-bold">{publicModalQ.idSoalan}</span>
+                </div>
+              </div>
+
+              {/* Form Input */}
+              <form onSubmit={handleCreatePublicLink} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Nama Kelas Sasaran <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="text"
+                    required
+                    value={publicKelasInput}
+                    onChange={(e) => setPublicKelasInput(e.target.value)}
+                    placeholder="Contoh: 5 CEMERLANG / 4 SAINS 1 / 3 ARIF"
+                    className="w-full px-4 py-3 text-sm border-2 border-slate-300 rounded-xl focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 font-bold text-slate-800 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal"
+                    autoFocus
+                  />
+                  {classes && classes.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-slate-400 font-bold mr-1">Pilih Cepat:</span>
+                      {classes.slice(0, 6).map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setPublicKelasInput(c.name)}
+                          className="text-[10px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 text-slate-600 font-bold px-2 py-1 rounded-md border border-slate-200 transition"
+                        >
+                          + {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Kod Tugasan (Dijana Automatik)
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      required
+                      value={publicGeneratedKod}
+                      onChange={(e) => setPublicGeneratedKod(e.target.value.toUpperCase())}
+                      className="flex-1 px-4 py-2.5 font-mono text-sm border border-slate-300 rounded-xl font-bold text-emerald-800 bg-emerald-50/50 uppercase outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+                        setPublicGeneratedKod(`TU-${randomSuffix}`);
+                      }}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition"
+                      title="Jana kod baru"
+                    >
+                      Tukar Kod
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Kod unik ini digunakan untuk mengasingkan rekod markah murid bagi kelas ini di bahagian Semakan Guru.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoadingPublic || !publicKelasInput.trim()}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-extrabold py-3 px-4 rounded-xl shadow-md shadow-emerald-600/20 text-sm flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span>{isLoadingPublic ? 'Menjana...' : 'Jana Pautan Tugasan Umum'}</span>
+                </button>
+              </form>
+
+              {/* Generated Result */}
+              {publicGeneratedLink && (
+                <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4.5 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" /> Pautan Sedia Digunakan!
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md">
+                      {publicGeneratedKod}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-emerald-200 shadow-xs">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={publicGeneratedLink}
+                      className="w-full font-mono text-xs text-slate-700 bg-transparent outline-none select-all"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(publicGeneratedLink);
+                        setCopiedPublicLink(true);
+                        setTimeout(() => setCopiedPublicLink(false), 2500);
+                      }}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedPublicLink ? '✓ Pautan Disalin!' : 'Salin Pautan Tugasan'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${publicModalQ.subjek.toUpperCase()} (${publicModalQ.tingkatan.toUpperCase()})*`;
+                        const text = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${publicKelasInput.toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${publicModalQ.bab}\n🔑 *Kod Tugasan:* ${publicGeneratedKod}\n\n👉 *Pautan Tugasan (Hanya masukkan Nama Penuh & Kelas):*\n${publicGeneratedLink}\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
+                        navigator.clipboard.writeText(text);
+                        setCopiedPublicWa(true);
+                        setTimeout(() => setCopiedPublicWa(false), 2500);
+                      }}
+                      className="flex-1 bg-[#25D366] hover:bg-[#20ba5a] text-white py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      <span>💬</span>
+                      <span>{copiedPublicWa ? '✓ Teks WA Disalin!' : 'Salin Mesej WhatsApp'}</span>
+                    </button>
+
+                    <a 
+                      href={publicGeneratedLink} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition"
+                      title="Uji pautan di tab baru"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-600" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Previously Created Links for this question */}
+              {publicExistingList.length > 0 && (
+                <div className="border-t border-slate-200 pt-4">
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                    <span>Senarai Pautan Tugasan Kelas Sedia Ada ({publicExistingList.length}):</span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {publicExistingList.map((item, idx) => {
+                      const itemUrl = `${window.location.origin}/?qid=${item.qid}&kod=${encodeURIComponent(item.kod)}&kelas=${encodeURIComponent(item.kelas)}&mod=umum`;
+                      return (
+                        <div key={item.kod || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-800">{item.kelas}</span>
+                              <span className="font-mono text-[10px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded">
+                                {item.kod}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                              Dicipta: {item.createdAt || 'Baru ini'}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(itemUrl);
+                              alert(`Pautan bagi kelas ${item.kelas} berjaya disalin!`);
+                            }}
+                            className="bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition shrink-0"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Salin Link</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setShowPublicModal(false)}
+                className="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
