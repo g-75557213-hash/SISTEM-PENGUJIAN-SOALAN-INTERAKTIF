@@ -145,25 +145,27 @@ export default function StudentView({
           
           <div className="space-y-4 text-left mb-6">
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">E-mel Pelajar (Pilihan / Optional)</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">E-MEL DELIMA (Atau E-mel Pelajar)</label>
               <input 
                 type="email"
                 value={delimaEmail}
                 onChange={(e) => setDelimaEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 font-mono text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                placeholder="Contoh: pelajar@gmail.com (Boleh dikosongkan)"
+                style={{ color: '#000000', WebkitTextFillColor: '#000000', backgroundColor: '#ffffff', caretColor: '#000000' }}
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white !bg-white font-mono text-black !text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="m-1234567@moe-dl.edu.my"
               />
-              <p className="text-[10px] text-slate-400 mt-1">E-mel adalah pilihan. Boleh dikosongkan jika tiada.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Mestilah e-mel @moe-dl.edu.my yang sah (atau e-mel pelajar)</p>
             </div>
             
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Nama Penuh Pelajar (Wajib / Huruf Besar)</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">NAMA PENUH</label>
               <input 
                 type="text"
                 value={delimaName}
                 onChange={(e) => setDelimaName(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-slate-50 text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none uppercase"
-                placeholder="MASUKKAN NAMA PENUH ANDA"
+                style={{ color: '#000000', WebkitTextFillColor: '#000000', backgroundColor: '#ffffff', caretColor: '#000000' }}
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white !bg-white text-black !text-black font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none uppercase"
+                placeholder="Contoh: ABU BIN ALI"
               />
             </div>
           </div>
