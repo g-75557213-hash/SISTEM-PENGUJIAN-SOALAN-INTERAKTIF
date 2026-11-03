@@ -1085,22 +1085,36 @@ export default function SemakanGuru({
                         <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{t.subjek} • {t.bab}</div>
                       </div>
 
-                      <div className="flex gap-2 mt-3 pt-2.5 border-t border-slate-200">
+                      <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-slate-200">
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(studentUrl);
                             alert(`Pautan murid untuk kelas ${t.kelas} berjaya disalin!`);
                           }}
                           className="flex-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition"
+                          title="Salin pautan terus murid"
                         >
                           <Copy className="w-3 h-3" />
                           <span>Salin Link</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${(t.subjek || '').toUpperCase()} (${(t.tingkatan || '').toUpperCase()})*`;
+                            const waText = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${(t.kelas || '').toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${t.bab || t.soalanTajuk}\n🔑 *Kod Tugasan:* ${t.kod}\n\n👉 *Pautan Tugasan:*\n${studentUrl}\n\n✨ *PERHATIAN MURID:*\n✅ TIDAK PERLU LOG MASUK CHROME ATAU AKAUN GOOGLE.\n✅ Hanya masukkan NAMA PENUH dan KELAS sahaja untuk menjawab.\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
+                            navigator.clipboard.writeText(waText);
+                            alert(`Mesej WhatsApp untuk kelas ${t.kelas} berjaya disalin!`);
+                          }}
+                          className="bg-[#25D366] hover:bg-[#20ba5a] text-white py-1.5 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition shadow-xs"
+                          title="Salin teks hebahan WhatsApp"
+                        >
+                          <span>💬</span>
+                          <span>WA</span>
                         </button>
                         <a
                           href={studentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 py-1.5 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center transition"
+                          className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center transition"
                           title="Buka pautan murid"
                         >
                           <ExternalLink className="w-3 h-3" />

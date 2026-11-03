@@ -1045,7 +1045,7 @@ export default function BankSoalan({
                     <button
                       onClick={() => {
                         const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${publicModalQ.subjek.toUpperCase()} (${publicModalQ.tingkatan.toUpperCase()})*`;
-                        const text = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${publicKelasInput.toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${publicModalQ.bab}\n🔑 *Kod Tugasan:* ${publicGeneratedKod}\n\n👉 *Pautan Tugasan (Hanya masukkan Nama Penuh & Kelas):*\n${publicGeneratedLink}\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
+                        const text = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${publicKelasInput.toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${publicModalQ.bab}\n🔑 *Kod Tugasan:* ${publicGeneratedKod}\n\n👉 *Pautan Tugasan:*\n${publicGeneratedLink}\n\n✨ *PERHATIAN MURID:*\n✅ TIDAK PERLU LOG MASUK CHROME ATAU AKAUN GOOGLE.\n✅ Hanya masukkan NAMA PENUH dan KELAS sahaja untuk menjawab.\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
                         navigator.clipboard.writeText(text);
                         setCopiedPublicWa(true);
                         setTimeout(() => setCopiedPublicWa(false), 2500);

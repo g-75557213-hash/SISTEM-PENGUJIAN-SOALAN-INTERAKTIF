@@ -27,9 +27,12 @@ export default function StudentView({
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const currentKod = initialKod || urlParams?.get('kod') || '';
   const currentKelasParam = initialKelas || urlParams?.get('kelas') || '';
-  const isPublicMode = initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
+  
+  // Public Mode (Tugasan Umum) state - Strictly NO Google/Chrome Login required!
+  const [isPublicMode, setIsPublicMode] = useState<boolean>(() => {
+    return initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
+  });
 
-  // Public Mode (Tugasan Umum) states - NO GOOGLE AUTH REQUIRED
   const [publicNama, setPublicNama] = useState('');
   const [publicKelas, setPublicKelas] = useState(currentKelasParam || '');
   const [isPublicStarted, setIsPublicStarted] = useState(false);
@@ -172,23 +175,29 @@ export default function StudentView({
       return (
         <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 p-4">
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-200">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm text-2xl font-bold">
-              🎓
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm text-2xl font-bold">
+              🌐
             </div>
             
+            <div className="flex justify-center mb-2">
+              <span className="inline-flex items-center gap-1.5 bg-emerald-100/80 text-emerald-800 text-[11px] font-extrabold px-3 py-1 rounded-full border border-emerald-300 shadow-xs">
+                <span>✨</span> TIDAK PERLU LOG MASUK CHROME
+              </span>
+            </div>
+
             <h2 className="text-2xl font-black text-center text-slate-800 mb-1">
-              Tugasan Interaktif
+              Tugasan Kuiz Interaktif
             </h2>
             <p className="text-xs text-center text-slate-500 mb-6 leading-relaxed">
-              Sila masukkan Nama Penuh dan Kelas anda untuk membolehkan guru merekod markah secara automatik.
+              Anda tidak perlu log masuk akaun Google atau pelayar Chrome. Hanya masukkan <span className="font-bold text-slate-700">Nama Penuh</span> dan <span className="font-bold text-slate-700">Kelas</span> anda untuk terus menjawab.
             </p>
 
             {currentKod && (
-              <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-2.5 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+              <div className="mb-5 bg-emerald-50/70 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5" /> Kod Tugasan:
                 </span>
-                <span className="font-mono text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-blue-300 text-blue-900 shadow-xs">
+                <span className="font-mono text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 text-emerald-900 shadow-xs">
                   {currentKod}
                 </span>
               </div>
@@ -273,12 +282,29 @@ export default function StudentView({
     }
 
     const publicScriptToInject = `
+      <style>
+        #delima-login-popup { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+      </style>
       <script>
         window.USER_NAME = "${publicNama.replace(/"/g, '\\"')}";
         window.USER_EMAIL = "";
         window.USER_KELAS = "${publicKelas.replace(/"/g, '\\"')}";
         window.TUGASAN_KOD = "${(currentKod || '').replace(/"/g, '\\"')}";
         window.IS_UMUM = true;
+
+        // Bersihkan sebarang popup pengesahan DELIMa atau Google login jika ada dalam fail soalan
+        function hapusPopupLogin() {
+          try {
+            var el = document.getElementById('delima-login-popup');
+            if (el) el.remove();
+            var allPopups = document.querySelectorAll('#delima-login-popup');
+            allPopups.forEach(function(p) { p.remove(); });
+          } catch(e) {}
+        }
+        window.addEventListener('DOMContentLoaded', hapusPopupLogin);
+        setTimeout(hapusPopupLogin, 100);
+        setTimeout(hapusPopupLogin, 500);
+        setTimeout(hapusPopupLogin, 1500);
 
         window.hantarMarkahKeSistem = function(markah, status) {
           try {
@@ -358,24 +384,46 @@ export default function StudentView({
     );
   }
 
-  // ==========================================
-  // 2. GOOGLE CLASSROOM MODE (DELIMa LOGIN)
-  // ==========================================
   if (!user) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-sm text-center max-w-md w-full border border-slate-200">
-          <div className="text-4xl mb-4">🎓</div>
-          <h2 className="text-2xl font-bold mb-2 text-slate-800">Log Masuk Pelajar</h2>
-          <p className="text-slate-500 text-sm mb-8">
-            Sila log masuk menggunakan akaun Google / DELIMa anda untuk menjawab soalan ini.
+      <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 p-4">
+        <div className="bg-white p-7 sm:p-8 rounded-3xl shadow-xl text-center max-w-md w-full border border-slate-200">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
+            🎓
+          </div>
+          <h2 className="text-2xl font-black mb-1 text-slate-800">Akses Kuiz Interaktif</h2>
+          <p className="text-slate-500 text-xs mb-6 leading-relaxed">
+            Pilih kaedah menjawab di bawah mengikut arahan guru anda:
           </p>
-          <button 
-            onClick={handleSignIn}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-sm cursor-pointer"
-          >
-            Log Masuk Google
-          </button>
+
+          <div className="space-y-3">
+            {/* OPTION 1: TUGASAN UMUM (NO CHROME LOGIN AT ALL) */}
+            <button 
+              onClick={() => setIsPublicMode(true)}
+              className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold py-3.5 px-4 rounded-xl transition shadow-md shadow-emerald-500/20 text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>🌐</span>
+              <span>Jawab Sebagai Tugasan Umum</span>
+            </button>
+            <p className="text-[11px] text-emerald-700 font-bold bg-emerald-50 py-1.5 px-3 rounded-lg border border-emerald-200">
+              ✨ Tidak perlu log masuk Chrome / Google. Hanya masukkan Nama Penuh & Kelas.
+            </p>
+
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">Atau Guna Classroom</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            {/* OPTION 2: GOOGLE CLASSROOM / DELIMA SIGN IN */}
+            <button 
+              onClick={handleSignIn}
+              className="w-full bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 hover:border-slate-300 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-4 h-4" />
+              <span>Log Masuk Google / DELIMa (Classroom)</span>
+            </button>
+          </div>
         </div>
       </div>
     );

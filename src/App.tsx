@@ -175,6 +175,9 @@ export default function App() {
     return (
       <StudentView 
         qid={qidParams} 
+        kod={kodParam}
+        kelasParam={kelasParam}
+        modParam={modParam}
         spreadsheetId={spreadsheetIdParam || spreadsheetId} 
         gasWebAppUrl={gasWebAppUrlParam || gasWebAppUrl} 
       />
@@ -394,10 +397,12 @@ function doGet(e) {
     return HtmlService.createHtmlOutput("<h2>Ralat Parameter</h2><p>Sila sertakan ID dalam pautan (e.g., ?qid=SQ-0001 atau ?sid=SS-0001).</p>");
   }
 
-  // Tangkap parameter kelas dan tugasan dari URL (dengan fallback)
+  // Tangkap parameter kelas, tugasan, kod dan mod dari URL (dengan fallback)
   let kelas = e.parameter.kelas || "";
   let tugasan = e.parameter.tugasan || "";
   const kod = e.parameter.kod || "";
+  const mod = e.parameter.mod || "";
+  const isUmumMode = mod === "umum" || !!kod;
   
   // Jika ada kod unik, cuba buat carian dinamik dari tab TUGASAN
   if (kod) {
@@ -423,8 +428,8 @@ function doGet(e) {
     }
   }
   
-  if (!kelas) kelas = "Tiada Kelas";
-  if (!tugasan) tugasan = "Tiada Tugasan";
+  if (!kelas) kelas = isUmumMode ? "" : "Tiada Kelas";
+  if (!tugasan) tugasan = isUmumMode ? "Tugasan Umum" : "Tiada Tugasan";
   
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -532,101 +537,88 @@ function doGet(e) {
     userEmail = userEmail || "";
     userName = userName || "";
     
-    // Suntik skrip ke dalam HTML soalan (Dengan parameter kelas dan tugasan)
-    const scriptToInject = 
-      "<script>" +
-      "  window.USER_EMAIL = " + JSON.stringify(userEmail) + ";" +
-      "  window.USER_NAME = " + JSON.stringify(userName) + ";" +
-      "  window.QID = " + JSON.stringify(qid) + ";" +
-      "  window.KELAS = " + JSON.stringify(kelas) + ";" +
-      "  window.TUGASAN = " + JSON.stringify(tugasan) + ";" +
-      "  window.KOD = " + JSON.stringify(kod) + ";" +
-      "  window.addEventListener('DOMContentLoaded', function() {" +
-      "    function mulakanSesi(nama, emel) {" +
-      "      window.USER_NAME = nama;" +
-      "      window.USER_EMAIL = emel;" +
-      "      try { localStorage.setItem('delima_name', nama); localStorage.setItem('delima_email', emel); } catch(e) {}" +
-      "      google.script.run.kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, '', 'Sedang menjawab');" +
-      "      var popup = document.getElementById('delima-login-popup');" +
-      "      if (popup) popup.remove();" +
-      "    }" +
-      "    if (!window.USER_EMAIL) {" +
-      "       try {" +
-      "         var savedName = localStorage.getItem('delima_name');" +
-      "         var savedEmail = localStorage.getItem('delima_email');" +
-      "         if (savedName && savedEmail) {" +
-      "           mulakanSesi(savedName, savedEmail);" +
-      "           return;" +
-      "         }" +
-      "       } catch(e) {}" +
-      "       var popup = document.createElement('div');" +
-      "       popup.id = 'delima-login-popup';" +
-      "       popup.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(248,250,252,0.95);backdrop-filter:blur(5px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;box-sizing:border-box;';" +
-      "       popup.innerHTML = '<style>' +
-      "         '#delima-login-popup input, #delima-login-popup input[type=\\"text\\"], #delima-login-popup input[type=\\"email\\"] {' +
-      "         '  background-color: #ffffff !important;' +
-      "         '  background: #ffffff !important;' +
-      "         '  color: #000000 !important;' +
-      "         '  -webkit-text-fill-color: #000000 !important;' +
-      "         '  caret-color: #000000 !important;' +
-      "         '  opacity: 1 !important;' +
-      "         '  border: 1px solid #cbd5e1 !important;' +
-      "         '}' +
-      "         '#delima-login-popup input::placeholder {' +
-      "         '  color: #94a3b8 !important;' +
-      "         '  -webkit-text-fill-color: #94a3b8 !important;' +
-      "         '  opacity: 1 !important;' +
-      "         '}' +
-      "         '#delima-login-popup input:focus {' +
-      "         '  background-color: #ffffff !important;' +
-      "         '  background: #ffffff !important;' +
-      "         '  color: #000000 !important;' +
-      "         '  -webkit-text-fill-color: #000000 !important;' +
-      "         '  border-color: #2563eb !important;' +
-      "         '  box-shadow: 0 0 0 3px rgba(37,99,235,0.15) !important;' +
-      "         '}' +
-      "         '</style>' +
-      "         '<div style=\\"background:white;padding:30px;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;\\">\' +\n' +
-      "         \'<div style=\\"font-size:40px;margin-bottom:15px;\\">🎓</div>\' +\n' +
-      "         \'<h2 style=\\"color:#1e293b;margin:0 0 10px 0;font-size:22px;font-weight:bold;\\">Pengesahan Identiti</h2>\' +\n' +
-      "         \'<p style=\\"color:#64748b;font-size:14px;margin-bottom:25px;line-height:1.5;\\">Sila masukkan maklumat anda untuk membolehkan guru merekod markah.</p>\' +\n' +
-      "         \'<div style=\\"text-align:left;margin-bottom:15px;\\"><label style=\\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;\\">NAMA PENUH</label><input type=\\"text\\" id=\\"input-nama\\" placeholder=\\"Contoh: ABU BIN ALI\\" style=\\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;\\"></div>\' +\n' +
-      "         \'<div style=\\"text-align:left;margin-bottom:25px;\\"><label style=\\"display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;\\">E-MEL DELIMA</label><input type=\\"email\\" id=\\"input-emel\\" placeholder=\\"m-1234567@moe-dl.edu.my\\" style=\\"width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;font-family:monospace;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;\\"><p style=\\"font-size:11px;color:#94a3b8;margin-top:6px;\\">Mestilah e-mel @moe-dl.edu.my yang sah</p></div>\' +\n' +
-      "         \'<button id=\\"btn-mula\\" style=\\"width:100%;background:#2563eb;color:white;border:none;padding:14px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;transition:background 0.2s;\\">Mula Menjawab</button>\' +\n' +
-      "       \'</div>\';" +
-      "       document.body.appendChild(popup);" +
-      "       var inpNama = document.getElementById('input-nama');" +
-      "       var inpEmel = document.getElementById('input-emel');" +
-      "       if (inpNama) {" +
-      "         inpNama.addEventListener('input', function() {" +
-      "           this.style.setProperty('color', '#000000', 'important');" +
-      "           this.style.setProperty('-webkit-text-fill-color', '#000000', 'important');" +
-      "         });" +
-      "       }" +
-      "       if (inpEmel) {" +
-      "         inpEmel.addEventListener('input', function() {" +
-      "           this.style.setProperty('color', '#000000', 'important');" +
-      "           this.style.setProperty('-webkit-text-fill-color', '#000000', 'important');" +
-      "         });" +
-      "       }" +
-      "       document.getElementById('btn-mula').onclick = function() {" +
-      "         var nama = document.getElementById('input-nama').value.trim().toUpperCase();" +
-      "         var emel = document.getElementById('input-emel').value.trim().toLowerCase();" +
-      "         if (!nama) { alert('Sila masukkan nama penuh anda.'); return; }" +
-      "         if (!emel) { alert('Sila masukkan e-mel DELIMa anda.'); return; }" +
-      "         if (emel.indexOf('@') === -1) { alert('Sila masukkan e-mel yang sah.'); return; }" +
-      "         mulakanSesi(nama, emel);" +
-      "       };" +
-      "    } else {" +
-      "       google.script.run.kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, '', 'Sedang menjawab');" +
-      "    }" +
-      "    window.hantarMarkahKeSistem = function(markah) {" +
-      "      google.script.run.withSuccessHandler(function() {" +
-      "        alert('Markah anda (' + markah + '%) telah berjaya direkodkan!');" +
-      "      }).kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, markah, 'Telah menjawab');" +
-      "    };" +
-      "  });" +
-      "</script>";
+    // Suntik skrip ke dalam HTML soalan (Dengan parameter kelas, tugasan, dan mod umum)
+    const scriptToInject = \`
+<script>
+  window.USER_EMAIL = \${JSON.stringify(userEmail)};
+  window.USER_NAME = \${JSON.stringify(userName)};
+  window.QID = \${JSON.stringify(qid)};
+  window.KELAS = \${JSON.stringify(kelas)};
+  window.TUGASAN = \${JSON.stringify(tugasan)};
+  window.KOD = \${JSON.stringify(kod)};
+  window.IS_UMUM = \${JSON.stringify(isUmumMode)};
+  window.addEventListener('DOMContentLoaded', function() {
+    function mulakanSesi(nama, emel, kls) {
+      window.USER_NAME = nama;
+      window.USER_EMAIL = emel || '';
+      if (kls) window.KELAS = kls;
+      try { localStorage.setItem('umum_name', nama); if (kls) localStorage.setItem('umum_kelas', kls); } catch(e) {}
+      google.script.run.kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, '', 'Sedang menjawab');
+      var popup = document.getElementById('delima-login-popup');
+      if (popup) popup.remove();
+    }
+    if (window.IS_UMUM) {
+       var popup = document.createElement('div');
+       popup.id = 'delima-login-popup';
+       popup.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(248,250,252,0.96);backdrop-filter:blur(5px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;box-sizing:border-box;';
+       popup.innerHTML = '<style>' +
+         '#delima-login-popup input { background-color:#ffffff !important; background:#ffffff !important; color:#000000 !important; -webkit-text-fill-color:#000000 !important; caret-color:#000000 !important; opacity:1 !important; border:1px solid #cbd5e1 !important; }' +
+         '#delima-login-popup input:focus { border-color:#059669 !important; box-shadow:0 0 0 3px rgba(5,150,105,0.15) !important; }' +
+         '</style>' +
+         '<div style="background:white;padding:30px;border-radius:20px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;">' +
+         '<div style="font-size:36px;margin-bottom:8px;">🌐</div>' +
+         '<div style="display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:bold;margin-bottom:12px;">✨ TIDAK PERLU LOG MASUK CHROME</div>' +
+         '<h2 style="color:#1e293b;margin:0 0 8px 0;font-size:20px;font-weight:bold;">Tugasan Kuiz Interaktif</h2>' +
+         '<p style="color:#64748b;font-size:13px;margin-bottom:20px;line-height:1.4;">Hanya masukkan maklumat anda untuk mula menjawab.</p>' +
+         '<div style="text-align:left;margin-bottom:15px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">NAMA PENUH</label><input type="text" id="input-nama" placeholder="Contoh: ABU BIN ALI" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;"></div>' +
+         '<div style="text-align:left;margin-bottom:20px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">KELAS</label><input type="text" id="input-kelas" placeholder="Contoh: 5 CEMERLANG" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;"></div>' +
+         '<button id="btn-mula" style="width:100%;background:#059669;color:white;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;">Mula Menjawab</button>' +
+         '</div>';
+       document.body.appendChild(popup);
+       if (window.KELAS && window.KELAS !== 'Tiada Kelas') { document.getElementById('input-kelas').value = window.KELAS; }
+       document.getElementById('btn-mula').onclick = function() {
+         var nama = document.getElementById('input-nama').value.trim().toUpperCase();
+         var kls = document.getElementById('input-kelas').value.trim().toUpperCase();
+         if (!nama) { alert('Sila masukkan nama penuh anda.'); return; }
+         if (!kls) { alert('Sila masukkan kelas anda.'); return; }
+         mulakanSesi(nama, '', kls);
+       };
+    } else if (!window.USER_EMAIL) {
+       var popup = document.createElement('div');
+       popup.id = 'delima-login-popup';
+       popup.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(248,250,252,0.95);backdrop-filter:blur(5px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;box-sizing:border-box;';
+       popup.innerHTML = '<style>' +
+         '#delima-login-popup input { background-color:#ffffff !important; background:#ffffff !important; color:#000000 !important; -webkit-text-fill-color:#000000 !important; caret-color:#000000 !important; opacity:1 !important; border:1px solid #cbd5e1 !important; }' +
+         '#delima-login-popup input:focus { border-color:#2563eb !important; box-shadow:0 0 0 3px rgba(37,99,235,0.15) !important; }' +
+         '</style>' +
+         '<div style="background:white;padding:30px;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;">' +
+         '<div style="font-size:40px;margin-bottom:15px;">🎓</div>' +
+         '<h2 style="color:#1e293b;margin:0 0 10px 0;font-size:22px;font-weight:bold;">Pengesahan Identiti</h2>' +
+         '<p style="color:#64748b;font-size:14px;margin-bottom:25px;line-height:1.5;">Sila masukkan maklumat anda untuk membolehkan guru merekod markah.</p>' +
+         '<div style="text-align:left;margin-bottom:15px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">NAMA PENUH</label><input type="text" id="input-nama" placeholder="Contoh: ABU BIN ALI" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;"></div>' +
+         '<div style="text-align:margin-bottom:25px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">E-MEL DELIMA</label><input type="email" id="input-emel" placeholder="m-1234567@moe-dl.edu.my" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;font-family:monospace;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;"></div>' +
+         '<button id="btn-mula" style="width:100%;background:#2563eb;color:white;border:none;padding:14px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;">Mula Menjawab</button>' +
+         '</div>';
+       document.body.appendChild(popup);
+       document.getElementById('btn-mula').onclick = function() {
+         var nama = document.getElementById('input-nama').value.trim().toUpperCase();
+         var emel = document.getElementById('input-emel').value.trim().toLowerCase();
+         if (!nama) { alert('Sila masukkan nama penuh anda.'); return; }
+         if (!emel) { alert('Sila masukkan e-mel DELIMa anda.'); return; }
+         if (emel.indexOf('@') === -1) { alert('Sila masukkan e-mel yang sah.'); return; }
+         mulakanSesi(nama, emel);
+       };
+    } else {
+       google.script.run.kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, '', 'Sedang menjawab');
+    }
+    window.hantarMarkahKeSistem = function(markah) {
+      google.script.run.withSuccessHandler(function() {
+        alert('Markah anda (' + markah + '%) telah berjaya direkodkan!');
+      }).kemaskiniMarkah(window.QID, window.USER_NAME, window.USER_EMAIL, window.KELAS, window.TUGASAN, window.KOD, markah, 'Telah menjawab');
+    };
+  });
+</script>
+\`;
     
     let injectedHtml = htmlCode.match(/<\\/head>/i) ? htmlCode.replace(/<\\/head>/i, scriptToInject + "</head>") : scriptToInject + htmlCode;
     
