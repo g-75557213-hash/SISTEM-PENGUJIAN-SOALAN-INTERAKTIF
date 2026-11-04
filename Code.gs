@@ -130,24 +130,19 @@ function doGet(e) {
     let userEmail = "";
     let userName = "";
     
-    if (!isUmumMode) {
-      try { 
-        const activeEmail = Session.getActiveUser().getEmail();
-        if (activeEmail && activeEmail.toLowerCase().endsWith("moe-dl.edu.my")) {
-          userEmail = activeEmail;
-          try {
-            const profile = Classroom.UserProfiles.get(userEmail);
-            userName = profile.name.fullName;
-          } catch (apiErr) {
-            userName = userEmail.split('@')[0].toUpperCase(); 
-          }
+    try { 
+      const activeEmail = Session.getActiveUser().getEmail();
+      if (activeEmail) {
+        userEmail = activeEmail;
+        try {
+          const profile = Classroom.UserProfiles.get(userEmail);
+          userName = (profile && profile.name && profile.name.fullName) ? profile.name.fullName.toUpperCase() : "";
+        } catch (apiErr) {
+          userName = userEmail.split('@')[0].toUpperCase(); 
         }
-      } catch (err) {
-        userEmail = ""; 
-        userName = "";
       }
-    } else {
-      userEmail = "";
+    } catch (err) {
+      userEmail = ""; 
       userName = "";
     }
     userEmail = userEmail || "";
@@ -200,6 +195,7 @@ function doGet(e) {
             '<button id=\\"btn-mula\\" style=\\"width:100%;background:linear-gradient(to right, #059669, #0d9488);color:white;border:none;padding:14px;border-radius:12px;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,0.25);\\">Mula Menjawab Tugasan ➔</button>' +
             '</div>";' +
           'document.body.appendChild(popup);' +
+          'if (window.USER_NAME) { document.getElementById("input-nama").value = window.USER_NAME; }' +
           'if (window.KELAS && window.KELAS !== "Tiada Kelas") { document.getElementById("input-kelas").value = window.KELAS; }' +
           'document.getElementById("btn-mula").onclick = function() {' +
             'var nama = document.getElementById("input-nama").value.trim().toUpperCase();' +

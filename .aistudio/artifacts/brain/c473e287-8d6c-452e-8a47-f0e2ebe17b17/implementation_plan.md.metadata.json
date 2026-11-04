@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan pelaksanaan untuk memisahkan data Tugasan Umum secara tegas daripada data Wayground dan membaiki paparan markah NaN%.",
-  "updatedAt": "2026-11-04T03:15:51.815980473Z",
+  "summary": "Pelan reka bentuk untuk Tugasan Umum supaya sentiasa memaparkan skrin pengesahan nama murid sebelum menjawab, serta mengekstrak nama daripada akaun Google/Chrome yang terlog masuk sebagai pra-isian (pre-fill) yang boleh diedit oleh murid.",
+  "updatedAt": "2026-11-04T03:37:10.430823112Z",
   "requestFeedback": true,
   "userFacing": true
 }

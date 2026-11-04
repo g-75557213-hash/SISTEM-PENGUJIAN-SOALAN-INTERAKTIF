@@ -60,12 +60,15 @@ export default function StudentView({
   // Load saved identity from localStorage
   useEffect(() => {
     if (isPublicMode) {
-      // Mod Umum: SENTIASA kosongkan nama supaya murid wajib menaip NAMA PENUH mereka
-      setPublicNama('');
+      // Pre-fill nama jika akaun terlog masuk dikesan, tetapi kekalkan borang pengesahan murid
+      if (user && user.displayName) {
+        setPublicNama(user.displayName.toUpperCase());
+      } else {
+        const savedNama = localStorage.getItem(`umum_student_nama`);
+        if (savedNama) setPublicNama(savedNama.toUpperCase());
+      }
       if (currentKelasParam) {
         setPublicKelas(currentKelasParam);
-      } else {
-        setPublicKelas('');
       }
     } else if (user) {
       const savedEmail = localStorage.getItem(`delima_email_${user.uid}`);
