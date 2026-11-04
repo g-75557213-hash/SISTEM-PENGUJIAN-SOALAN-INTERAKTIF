@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
-import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets } from '../lib/sheets';
+import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
 import { createAssignment, deleteAssignment } from '../lib/classroom';
 import { logout } from '../lib/firebase';
@@ -162,6 +162,11 @@ export default function BankSoalan({
       setPublicExistingList(prev => [newRecord, ...prev.filter(item => item.kod !== finalKod)]);
     } catch (e) {
       console.warn("Gagal simpan ke localStorage:", e);
+    }
+
+    // Auto ensure tab TUGASAN UMUM exists in teacher's Google Spreadsheet
+    if (token && spreadsheetId) {
+      ensureTugasanUmumSheet(token, spreadsheetId).catch(() => {});
     }
 
     // 3. Sync to server in background

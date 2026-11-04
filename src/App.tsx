@@ -583,25 +583,35 @@ function doGet(e) {
        popup.id = 'delima-login-popup';
        popup.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(248,250,252,0.96);backdrop-filter:blur(5px);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;box-sizing:border-box;';
        popup.innerHTML = '<style>' +
-         '#delima-login-popup input { background-color:#ffffff !important; background:#ffffff !important; color:#000000 !important; -webkit-text-fill-color:#000000 !important; caret-color:#000000 !important; opacity:1 !important; border:1px solid #cbd5e1 !important; }' +
-         '#delima-login-popup input:focus { border-color:#059669 !important; box-shadow:0 0 0 3px rgba(5,150,105,0.15) !important; }' +
+         '#delima-login-popup input { background-color:#ffffff !important; background:#ffffff !important; color:#000000 !important; -webkit-text-fill-color:#000000 !important; caret-color:#000000 !important; opacity:1 !important; border:2px solid #cbd5e1 !important; text-transform:uppercase !important; font-weight:bold !important; }' +
+         '#delima-login-popup input:focus { border-color:#059669 !important; box-shadow:0 0 0 3px rgba(5,150,105,0.18) !important; outline:none !important; }' +
          '</style>' +
-         '<div style="background:white;padding:30px;border-radius:20px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);max-width:400px;width:100%;border:1px solid #e2e8f0;text-align:center;">' +
-         '<div style="font-size:36px;margin-bottom:8px;">🌐</div>' +
-         '<div style="display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:bold;margin-bottom:12px;">✨ TIDAK PERLU LOG MASUK CHROME</div>' +
-         '<h2 style="color:#1e293b;margin:0 0 8px 0;font-size:20px;font-weight:bold;">Tugasan Kuiz Interaktif</h2>' +
-         '<p style="color:#64748b;font-size:13px;margin-bottom:20px;line-height:1.4;">Hanya masukkan maklumat anda untuk mula menjawab.</p>' +
-         '<div style="text-align:left;margin-bottom:15px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">NAMA PENUH</label><input type="text" id="input-nama" placeholder="Contoh: ABU BIN ALI" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;"></div>' +
-         '<div style="text-align:left;margin-bottom:20px;"><label style="display:block;font-size:12px;font-weight:bold;color:#475569;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;">KELAS</label><input type="text" id="input-kelas" placeholder="Contoh: 5 CEMERLANG" style="width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;"></div>' +
-         '<button id="btn-mula" style="width:100%;background:#059669;color:white;border:none;padding:14px;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;">Mula Menjawab</button>' +
+         '<div style="background:white;padding:32px;border-radius:22px;box-shadow:0 15px 35px -5px rgba(0,0,0,0.12);max-width:420px;width:100%;border:2px solid #e2e8f0;text-align:center;">' +
+         '<div style="font-size:38px;margin-bottom:8px;">🎓</div>' +
+         '<div style="display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:900;margin-bottom:12px;letter-spacing:0.5px;">✨ MOD UMUM • TIADA LOG MASUK DIPERLUKAN</div>' +
+         '<h2 style="color:#0f172a;margin:0 0 6px 0;font-size:22px;font-weight:900;">Pengesahan Murid</h2>' +
+         '<p style="color:#475569;font-size:13px;margin-bottom:20px;line-height:1.4;">Sila masukkan maklumat anda sebelum mula menjawab soalan kuiz.</p>' +
+         '<div style="text-align:left;margin-bottom:16px;">' +
+           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+             '<label style="display:block;font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">NAMA PENUH (HURUF BESAR) <span style="color:#ef4444;">*</span></label>' +
+             '<span style="font-size:10px;font-weight:900;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;border:1px solid #fde68a;">HURUF BESAR</span>' +
+           '</div>' +
+           '<input type="text" id="input-nama" placeholder="CONTOH: AHMAD BIN ABDULLAH" oninput="this.value = this.value.toUpperCase();" style="width:100%;padding:13px 14px;border:2px solid #cbd5e1;border-radius:10px;font-size:15px;box-sizing:border-box;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:900;text-transform:uppercase;">' +
+           '<p style="font-size:11px;color:#64748b;margin:5px 0 0 0;">⚠️ Sila taip nama penuh rasmi dalam <b>HURUF BESAR</b> seperti dalam rekod sekolah.</p>' +
+         '</div>' +
+         '<div style="text-align:left;margin-bottom:22px;">' +
+           '<label style="display:block;font-size:12px;font-weight:900;color:#0f172a;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">KELAS <span style="color:#ef4444;">*</span></label>' +
+           '<input type="text" id="input-kelas" placeholder="CONTOH: 1 ABU BAKAR / 5 CEMERLANG" oninput="this.value = this.value.toUpperCase();" style="width:100%;padding:13px 14px;border:2px solid #cbd5e1;border-radius:10px;font-size:14px;box-sizing:border-box;background-color:#ffffff !important;background:#ffffff !important;color:#000000 !important;-webkit-text-fill-color:#000000 !important;caret-color:#000000 !important;font-weight:bold;text-transform:uppercase;">' +
+         '</div>' +
+         '<button id="btn-mula" style="width:100%;background:linear-gradient(to right, #059669, #0d9488);color:white;border:none;padding:14px;border-radius:12px;font-size:16px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,0.25);">Mula Menjawab Tugasan ➔</button>' +
          '</div>';
        document.body.appendChild(popup);
        if (window.KELAS && window.KELAS !== 'Tiada Kelas') { document.getElementById('input-kelas').value = window.KELAS; }
        document.getElementById('btn-mula').onclick = function() {
          var nama = document.getElementById('input-nama').value.trim().toUpperCase();
          var kls = document.getElementById('input-kelas').value.trim().toUpperCase();
-         if (!nama) { alert('Sila masukkan nama penuh anda.'); return; }
-         if (!kls) { alert('Sila masukkan kelas anda.'); return; }
+         if (!nama) { alert('Sila masukkan NAMA PENUH anda dalam HURUF BESAR.'); return; }
+         if (!kls) { alert('Sila masukkan KELAS anda.'); return; }
          mulakanSesi(nama, '', kls);
        };
     } else if (!window.USER_EMAIL) {
@@ -654,7 +664,7 @@ function doGet(e) {
   }
 }
 
-// Fungsi dipanggil secara 'live' dari HTML untuk update Sheet Markah Murid (Lengkap 10 lajur)
+// Fungsi dipanggil secara 'live' dari HTML untuk update Sheet Markah Murid & Tab Khas TUGASAN UMUM
 function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -680,6 +690,9 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
     
     const timestamp = new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' });
     const markahStr = (markah !== "" && markah != null) ? markah + "%" : "-";
+    const cleanNamaUpper = (nama || "").toString().trim().toUpperCase();
+    const cleanKodUpper = (kod || "").toString().trim().toUpperCase();
+    const cleanKelasUpper = (kelas || "").toString().trim().toUpperCase();
     
     const data = sheet.getDataRange().getValues();
     let rowIdx = -1;
@@ -699,15 +712,15 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
         }
       } else {
         // Mod Umum (Guest / Tanpa E-mel): padankan dengan Nama Murid dan Kod/Kelas
-        const matchKod = kod ? (rowKod === kod.toUpperCase().trim()) : (rowKelas === (kelas || "").toUpperCase().trim());
-        if (rowQid === qid && rowNama === (nama || "").toUpperCase().trim() && matchKod) {
+        const matchKod = kod ? (rowKod === cleanKodUpper) : (rowKelas === cleanKelasUpper);
+        if (rowQid === qid && rowNama === cleanNamaUpper && matchKod) {
           rowIdx = i + 1;
           break;
         }
       }
     }
     
-    const rowData = [timestamp, qid, nama, email, kelas || "Tiada Kelas", tugasan || "Tiada Tugasan", markahStr, status, "", kod || ""];
+    const rowData = [timestamp, qid, cleanNamaUpper, email, cleanKelasUpper || "Tiada Kelas", tugasan || "Tiada Tugasan", markahStr, status, "", cleanKodUpper || ""];
     
     if (rowIdx !== -1) {
       // Dapatkan status sedia ada
@@ -722,6 +735,68 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
       sheet.getRange(rowIdx, 1, 1, numCols).setValues([rowData.slice(0, numCols)]);
     } else {
       sheet.appendRow(rowData);
+    }
+
+    // ========================================================
+    // TAB KHAS SPREADSHEET: TUGASAN UMUM
+    // Merekodkan semua pelajar yang menyiapkan Tugasan Umum
+    // ========================================================
+    try {
+      let sheetUmum = ss.getSheetByName("TUGASAN UMUM");
+      const headerRowUmum = [
+        "Timestamp",
+        "Kod Tugasan",
+        "ID Soalan",
+        "Kelas",
+        "Nama Pelajar (Huruf Besar)",
+        "Markah (%)",
+        "Status",
+        "Tajuk / Bab",
+        "Nama Guru"
+      ];
+      if (!sheetUmum) {
+        sheetUmum = ss.insertSheet("TUGASAN UMUM");
+        sheetUmum.getRange(1, 1, 1, 9).setValues([headerRowUmum]);
+        sheetUmum.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#059669").setFontColor("#ffffff");
+        sheetUmum.setFrozenRows(1);
+      }
+      
+      const dataUmum = sheetUmum.getDataRange().getValues();
+      let rowUmumIdx = -1;
+      
+      for (let u = 1; u < dataUmum.length; u++) {
+        const uKod = (dataUmum[u][1] || "").toString().trim().toUpperCase();
+        const uNama = (dataUmum[u][4] || "").toString().trim().toUpperCase();
+        const uKelas = (dataUmum[u][3] || "").toString().trim().toUpperCase();
+
+        if (cleanKodUpper && uKod === cleanKodUpper && uNama === cleanNamaUpper) {
+          rowUmumIdx = u + 1;
+          break;
+        } else if (!cleanKodUpper && uNama === cleanNamaUpper && uKelas === cleanKelasUpper) {
+          rowUmumIdx = u + 1;
+          break;
+        }
+      }
+      
+      const umumDataRow = [
+        timestamp,
+        cleanKodUpper || "UMUM",
+        qid,
+        cleanKelasUpper || "Tiada Kelas",
+        cleanNamaUpper,
+        markahStr,
+        status,
+        tugasan || "-",
+        ""
+      ];
+      
+      if (rowUmumIdx !== -1) {
+        sheetUmum.getRange(rowUmumIdx, 1, 1, 9).setValues([umumDataRow]);
+      } else {
+        sheetUmum.appendRow(umumDataRow);
+      }
+    } catch (errUmum) {
+      console.error("Gagal simpan ke tab TUGASAN UMUM:", errUmum);
     }
   } catch (e) {
     console.error(e);

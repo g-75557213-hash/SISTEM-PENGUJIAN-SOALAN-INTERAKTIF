@@ -142,11 +142,11 @@ export default function StudentView({
     const cleanKelas = publicKelas.trim().toUpperCase();
 
     if (!cleanNama) {
-      alert("Sila masukkan Nama Penuh anda.");
+      alert("Sila masukkan NAMA PENUH anda dalam HURUF BESAR.");
       return;
     }
     if (!cleanKelas) {
-      alert("Sila masukkan Kelas anda.");
+      alert("Sila masukkan KELAS anda.");
       return;
     }
 
@@ -173,28 +173,28 @@ export default function StudentView({
   if (isPublicMode) {
     if (!isPublicStarted) {
       return (
-        <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 p-4">
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-200">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm text-2xl font-bold">
-              🌐
+        <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-emerald-50/40 to-teal-100/50 p-4">
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-2 border-emerald-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner text-3xl font-bold">
+              🎓
             </div>
             
             <div className="flex justify-center mb-2">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-100/80 text-emerald-800 text-[11px] font-extrabold px-3 py-1 rounded-full border border-emerald-300 shadow-xs">
-                <span>✨</span> TIDAK PERLU LOG MASUK CHROME
+              <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-[11px] font-black px-3.5 py-1 rounded-full border border-emerald-300 shadow-xs uppercase tracking-wide">
+                <span>✨</span> MOD UMUM • TIADA LOG MASUK DIPERLUKAN
               </span>
             </div>
 
             <h2 className="text-2xl font-black text-center text-slate-800 mb-1">
-              Tugasan Kuiz Interaktif
+              Pengesahan Murid
             </h2>
-            <p className="text-xs text-center text-slate-500 mb-6 leading-relaxed">
-              Anda tidak perlu log masuk akaun Google atau pelayar Chrome. Hanya masukkan <span className="font-bold text-slate-700">Nama Penuh</span> dan <span className="font-bold text-slate-700">Kelas</span> anda untuk terus menjawab.
+            <p className="text-xs text-center text-slate-600 mb-5 leading-relaxed font-medium">
+              Sila masukkan <span className="font-bold text-emerald-800">NAMA PENUH (HURUF BESAR)</span> dan <span className="font-bold text-slate-800">KELAS</span> anda sebelum mula menjawab soalan kuiz.
             </p>
 
             {currentKod && (
-              <div className="mb-5 bg-emerald-50/70 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+              <div className="mb-4.5 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between shadow-xs">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5" /> Kod Tugasan:
                 </span>
                 <span className="font-mono text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 text-emerald-900 shadow-xs">
@@ -205,58 +205,74 @@ export default function StudentView({
 
             <form onSubmit={handleStartPublicQuiz} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  NAMA PENUH <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                    NAMA PENUH (HURUF BESAR) <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 uppercase">
+                    HURUF BESAR
+                  </span>
+                </div>
                 <input 
                   type="text"
                   required
                   value={publicNama}
-                  onChange={(e) => setPublicNama(e.target.value)}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                  onChange={(e) => setPublicNama(e.target.value.toUpperCase())}
                   style={{ 
                     color: '#000000', 
                     WebkitTextFillColor: '#000000', 
                     backgroundColor: '#ffffff', 
-                    caretColor: '#000000' 
+                    caretColor: '#000000',
+                    textTransform: 'uppercase'
                   }}
-                  className="w-full px-4 py-3 text-sm border-2 border-slate-300 rounded-xl bg-white !bg-white text-black !text-black font-bold focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal"
-                  placeholder="Contoh: ABU BIN ALI"
+                  className="w-full px-4 py-3.5 text-base font-extrabold border-2 border-slate-300 rounded-xl bg-white !bg-white text-black !text-black focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal shadow-xs transition"
+                  placeholder="CONTOH: AHMAD BIN ABDULLAH"
                   autoFocus
                 />
+                <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium leading-tight">
+                  <span>ℹ️</span> Taip nama penuh rasmi dalam <strong>HURUF BESAR</strong> seperti dalam pendaftaran sekolah.
+                </p>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
                   KELAS <span className="text-red-500">*</span>
                 </label>
                 <input 
                   type="text"
                   required
                   value={publicKelas}
-                  onChange={(e) => setPublicKelas(e.target.value)}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                  onChange={(e) => setPublicKelas(e.target.value.toUpperCase())}
                   style={{ 
                     color: '#000000', 
                     WebkitTextFillColor: '#000000', 
                     backgroundColor: '#ffffff', 
-                    caretColor: '#000000' 
+                    caretColor: '#000000',
+                    textTransform: 'uppercase'
                   }}
-                  className="w-full px-4 py-3 text-sm border-2 border-slate-300 rounded-xl bg-white !bg-white text-black !text-black font-bold focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal"
-                  placeholder="Contoh: 5 CEMERLANG / 4 SAINS 1"
+                  className="w-full px-4 py-3 text-sm font-bold border-2 border-slate-300 rounded-xl bg-white !bg-white text-black !text-black focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal shadow-xs transition"
+                  placeholder="CONTOH: 1 ABU BAKAR / 5 CEMERLANG"
                 />
               </div>
 
               <button 
                 type="submit"
-                className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold py-3.5 px-4 rounded-xl transition shadow-md shadow-blue-500/20 text-sm flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black py-4 px-4 rounded-xl transition shadow-lg shadow-emerald-600/25 text-base flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
-                <span>Mula Menjawab</span>
-                <span>➔</span>
+                <span>Mula Menjawab Tugasan</span>
+                <span className="text-lg">➔</span>
               </button>
             </form>
 
             <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-              <span className="text-[11px] text-slate-400 flex items-center justify-center gap-1">
-                <span>🔒</span> Markah disimpan terus ke sistem semakan guru
+              <span className="text-[11px] text-slate-400 flex items-center justify-center gap-1.5 font-medium">
+                <span>🔒</span> Markah direkodkan secara automatik ke Google Spreadsheet guru
               </span>
             </div>
           </div>

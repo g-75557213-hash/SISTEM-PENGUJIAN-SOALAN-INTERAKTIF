@@ -1096,3 +1096,215 @@ export async function updateQuestionMetaInSheets(
     return false;
   }
 }
+
+/**
+ * Memastikan tab "TUGASAN UMUM" wujud dalam Google Spreadsheet.
+ * Jika tiada, ia akan mencipta tab ini secara automatik dengan baris tajuk yang lengkap.
+ */
+export async function ensureTugasanUmumSheet(token: string, spreadsheetId: string): Promise<boolean> {
+  try {
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!metaRes.ok) return false;
+    const meta = await metaRes.json();
+    const sheets = meta.sheets || [];
+    const exists = sheets.some((s: any) => (s.properties?.title || '').trim().toUpperCase() === 'TUGASAN UMUM');
+
+    if (!exists) {
+      // Cipta tab baru "TUGASAN UMUM"
+      const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: 'TUGASAN UMUM'
+                }
+              }
+            }
+          ]
+        })
+      });
+      if (!addRes.ok) {
+        console.warn('Gagal menambah helaian TUGASAN UMUM:', await addRes.text());
+        return false;
+      }
+    }
+
+    // Periksa sama ada baris tajuk wujud
+    const headRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:I1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    let needHeaders = true;
+    if (headRes.ok) {
+      const headData = await headRes.json();
+      if (headData.values && headData.values.length > 0 && headData.values[0].length >= 5) {
+        needHeaders = false;
+      }
+    }
+
+    if (needHeaders) {
+      const headerRow = [
+        "Timestamp",
+        "Kod Tugasan",
+        "ID Soalan",
+        "Kelas",
+        "Nama Pelajar (Huruf Besar)",
+        "Markah (%)",
+        "Status",
+        "Tajuk / Bab",
+        "Nama Guru"
+      ];
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:I1?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range: 'TUGASAN UMUM!A1:I1',
+          majorDimension: 'ROWS',
+          values: [headerRow]
+        })
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error ensuring TUGASAN UMUM sheet:', err);
+    return false;
+  }
+}
+
+/**
+ * Merekod atau mengemaskini markah pelajar yang menyiapkan Tugasan Umum ke dalam tab "TUGASAN UMUM"
+ */
+export async function recordTugasanUmumToSheet(
+  token: string,
+  spreadsheetId: string,
+  data: {
+    kod: string;
+    qid: string;
+    kelas: string;
+    nama: string;
+    markah: number | string | null;
+    status?: string;
+    bab?: string;
+    guruNama?: string;
+  }
+): Promise<boolean> {
+  try {
+    await ensureTugasanUmumSheet(token, spreadsheetId);
+    const timestamp = new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' });
+    const markahStr = data.markah !== null && data.markah !== undefined ? `${data.markah}%` : '-';
+    const cleanNamaUpper = String(data.nama || '').trim().toUpperCase();
+    const cleanKodUpper = String(data.kod || '').trim().toUpperCase();
+    const cleanKelasUpper = String(data.kelas || '').trim().toUpperCase();
+
+    // Dapatkan data sedia ada untuk semak jika rekod pelajar sudah ada
+    const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:I`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    let targetRow = -1;
+    if (readRes.ok) {
+      const readData = await readRes.json();
+      const rows = readData.values || [];
+      for (let i = 1; i < rows.length; i++) {
+        const rowKod = String(rows[i][1] || '').trim().toUpperCase();
+        const rowNama = String(rows[i][4] || '').trim().toUpperCase();
+        const rowKelas = String(rows[i][3] || '').trim().toUpperCase();
+
+        if (cleanKodUpper && rowKod === cleanKodUpper && rowNama === cleanNamaUpper) {
+          targetRow = i + 1;
+          break;
+        } else if (!cleanKodUpper && rowNama === cleanNamaUpper && rowKelas === cleanKelasUpper) {
+          targetRow = i + 1;
+          break;
+        }
+      }
+    }
+
+    const rowValues = [
+      timestamp,
+      cleanKodUpper || 'UMUM',
+      data.qid || '',
+      cleanKelasUpper,
+      cleanNamaUpper,
+      markahStr,
+      data.status || 'Selesai',
+      data.bab || '-',
+      data.guruNama || ''
+    ];
+
+    if (targetRow !== -1) {
+      // Kemaskini baris sedia ada
+      const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A${targetRow}:I${targetRow}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range: `TUGASAN UMUM!A${targetRow}:I${targetRow}`,
+          majorDimension: 'ROWS',
+          values: [rowValues]
+        })
+      });
+      return updateRes.ok;
+    } else {
+      // Tambah baris baru
+      const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:I:append?valueInputOption=USER_ENTERED`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          values: [rowValues]
+        })
+      });
+      return appendRes.ok;
+    }
+  } catch (err) {
+    console.error('Error recording to TUGASAN UMUM sheet:', err);
+    return false;
+  }
+}
+
+/**
+ * Membaca data pelajar yang menyiapkan tugasan umum daripada tab "TUGASAN UMUM"
+ */
+export async function getTugasanUmumRowsFromSheet(token: string, spreadsheetId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:I`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const rows = data.values || [];
+    if (rows.length <= 1) return [];
+
+    return rows.slice(1).map((row, idx) => ({
+      rowNumber: idx + 2,
+      timestamp: row[0] || '',
+      kod: row[1] || '',
+      qid: row[2] || '',
+      kelas: row[3] || '',
+      nama: (row[4] || '').toUpperCase(),
+      markah: row[5] ? parseFloat(String(row[5]).replace('%', '')) : null,
+      status: row[6] || 'Selesai',
+      bab: row[7] || '',
+      guruNama: row[8] || ''
+    }));
+  } catch (err) {
+    console.error('Error fetching rows from TUGASAN UMUM sheet:', err);
+    return [];
+  }
+}
