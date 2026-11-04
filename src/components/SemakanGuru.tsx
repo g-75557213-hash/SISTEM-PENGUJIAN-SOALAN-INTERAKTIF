@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission } from '../lib/classroom';
 import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check } from 'lucide-react';
-import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet } from '../lib/sheets';
+import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet } from '../lib/sheets';
 import { logout } from '../lib/firebase';
 
 export default function SemakanGuru({ 
@@ -55,81 +55,127 @@ export default function SemakanGuru({
     try {
       setLoadingUmum(true);
 
-      // 1. Load local cache first so items appear immediately
-      let localItems: any[] = [];
+      // 1. Load assignments: local cache, server, and Google Sheets "TUGASAN UMUM" tab
+      const assignmentsMap = new Map<string, any>();
+
+      // A. Local cache
       try {
         const stored = localStorage.getItem('sistem_tugasan_umum_list');
-        if (stored) localItems = JSON.parse(stored);
-        if (Array.isArray(localItems) && localItems.length > 0) {
-          setTugasanUmumList(localItems);
+        if (stored) {
+          const localList: any[] = JSON.parse(stored);
+          localList.forEach(item => {
+            if (item.kod) assignmentsMap.set(item.kod.toUpperCase(), item);
+          });
         }
       } catch (e) {}
 
-      // 2. Fetch assignments from server and merge
+      // B. Server API
       const urlAssignments = user?.email ? `/api/tugasan-umum?guruEmail=${encodeURIComponent(user.email)}` : '/api/tugasan-umum';
       try {
         const resAssignments = await fetch(urlAssignments);
         if (resAssignments.ok) {
           const dataA = await resAssignments.json();
           if (Array.isArray(dataA)) {
-            const map = new Map<string, any>();
-            localItems.forEach(item => map.set(item.kod, item));
-            dataA.forEach(item => map.set(item.kod, item));
-            setTugasanUmumList(Array.from(map.values()));
+            dataA.forEach(item => {
+              if (item.kod) assignmentsMap.set(item.kod.toUpperCase(), item);
+            });
           }
         }
       } catch (err) {
         console.warn("Gagal membaca tugasan umum dari pelayan:", err);
       }
-      
-      // 3. Fetch submissions from API
-      let apiSubs: any[] = [];
+
+      // C. Google Sheets "TUGASAN UMUM" tab:
+      // Struktur 4 lajur: [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum]
+      if (token && spreadsheetId) {
+        try {
+          const sheetAssignments = await getTugasanUmumRowsFromSheet(token, spreadsheetId);
+          if (Array.isArray(sheetAssignments) && sheetAssignments.length > 0) {
+            sheetAssignments.forEach(sa => {
+              const matchedQ = questions.find(q => q.idSoalan === sa.qid);
+              const cleanKod = (sa.kod || '').toUpperCase();
+              if (cleanKod) {
+                const existing = assignmentsMap.get(cleanKod);
+                assignmentsMap.set(cleanKod, {
+                  ...existing,
+                  kod: cleanKod,
+                  qid: sa.qid,
+                  kelas: sa.kelas,
+                  linkSoalan: sa.link,
+                  soalanTajuk: existing?.soalanTajuk || matchedQ?.bab || sa.qid,
+                  tingkatan: existing?.tingkatan || matchedQ?.tingkatan || '',
+                  subjek: existing?.subjek || matchedQ?.subjek || '',
+                  bab: existing?.bab || matchedQ?.bab || sa.qid,
+                  createdAt: existing?.createdAt || 'Google Sheets'
+                });
+              }
+            });
+          }
+        } catch (sheetAssnErr) {
+          console.warn("Gagal membaca dari helaian TUGASAN UMUM:", sheetAssnErr);
+        }
+      }
+
+      const allAssignments = Array.from(assignmentsMap.values());
+      setTugasanUmumList(allAssignments);
+
+      // 2. Load student submissions ("DATA PELAJAR YANG TELAH JAWAB")
+      // Sumber utama rasmi: Tab "Markah Murid" dalam Google Spreadsheet
+      const submissionsMap = new Map<string, any>();
+
+      // A. Fetch submissions from API cache
       try {
         const resSubs = await fetch('/api/tugasan-umum-submissions');
         if (resSubs.ok) {
           const dataS = await resSubs.json();
           if (Array.isArray(dataS)) {
-            apiSubs = dataS;
-            setTugasanUmumSubs(apiSubs);
+            dataS.forEach(item => {
+              const k = `${(item.kod || 'UMUM').toUpperCase()}_${(item.nama || '').toUpperCase()}_${item.qid || ''}`;
+              submissionsMap.set(k, item);
+            });
           }
         }
       } catch (subErr) {
         console.warn("Gagal membaca submissions tugasan umum dari pelayan:", subErr);
       }
 
-      // 4. Fetch submissions from Google Sheets "TUGASAN UMUM" tab if connected
+      // B. Fetch submissions from Google Sheets "Markah Murid" tab (Penyimpan rasmi markah murid)
       if (token && spreadsheetId) {
         try {
-          const sheetRows = await getTugasanUmumRowsFromSheet(token, spreadsheetId);
-          if (Array.isArray(sheetRows) && sheetRows.length > 0) {
-            const map = new Map<string, any>();
-            // Add API items
-            apiSubs.forEach(item => {
-              const k = `${(item.kod || '').toUpperCase()}_${(item.nama || '').toUpperCase()}`;
-              map.set(k, item);
+          const mmRows = await getMarkahMurid(token, spreadsheetId);
+          if (Array.isArray(mmRows) && mmRows.length > 0) {
+            const knownKods = new Set(allAssignments.map(a => (a.kod || '').toUpperCase()));
+            const knownClasses = new Set(allAssignments.map(a => (a.kelas || '').toUpperCase()));
+
+            mmRows.forEach(row => {
+              const rowKod = (row.kodUnik || '').toUpperCase().trim();
+              const rowKelas = (row.kelas || '').toUpperCase().trim();
+              const isUmum = rowKod.startsWith('TU-') || knownKods.has(rowKod) || !row.email || (knownClasses.has(rowKelas) && !row.email);
+
+              if (isUmum) {
+                const cleanNama = (row.nama || '').toUpperCase().trim();
+                const matchedAssn = allAssignments.find(a => (a.kod || '').toUpperCase() === rowKod);
+                const k = `${rowKod || 'UMUM'}_${cleanNama}_${row.qid}`;
+                submissionsMap.set(k, {
+                  kod: rowKod || matchedAssn?.kod || 'UMUM',
+                  qid: row.qid,
+                  kelas: row.kelas,
+                  nama: cleanNama,
+                  markah: row.markah !== undefined && row.markah !== null ? row.markah : null,
+                  status: row.status || 'Selesai',
+                  updatedAt: row.timestamp,
+                  bab: matchedAssn?.bab || row.tugasan || '',
+                  fromSheet: true
+                });
+              }
             });
-            // Add/overwrite with Google Sheets live entries
-            sheetRows.forEach(sr => {
-              const k = `${(sr.kod || '').toUpperCase()}_${(sr.nama || '').toUpperCase()}`;
-              map.set(k, {
-                kod: sr.kod,
-                qid: sr.qid,
-                kelas: sr.kelas,
-                nama: sr.nama,
-                markah: sr.markah,
-                status: sr.status,
-                updatedAt: sr.timestamp,
-                bab: sr.bab,
-                guruNama: sr.guruNama,
-                fromSheet: true
-              });
-            });
-            setTugasanUmumSubs(Array.from(map.values()));
           }
         } catch (sheetErr) {
-          console.warn("Gagal membaca rekod daripada helaian TUGASAN UMUM:", sheetErr);
+          console.warn("Gagal membaca markah murid daripada tab Markah Murid:", sheetErr);
         }
       }
+
+      setTugasanUmumSubs(Array.from(submissionsMap.values()));
     } catch (err) {
       console.error("Gagal memuat turun data Tugasan Umum:", err);
     } finally {
@@ -229,10 +275,16 @@ export default function SemakanGuru({
       } catch (err) {}
       
       const res = await fetch(`/api/tugasan-umum/${encodeURIComponent(kod)}`, { method: 'DELETE' });
+      if (token && spreadsheetId) {
+        deleteTugasanUmumRowFromSheet(token, spreadsheetId, kod).catch(() => {});
+      }
       alert("Tugasan umum berjaya dipadam.");
       loadTugasanUmumData();
     } catch (e) {
       console.error(e);
+      if (token && spreadsheetId) {
+        deleteTugasanUmumRowFromSheet(token, spreadsheetId, kod).catch(() => {});
+      }
       alert("Tugasan umum dipadam.");
       loadTugasanUmumData();
     }

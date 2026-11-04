@@ -664,13 +664,13 @@ function doGet(e) {
   }
 }
 
-// Fungsi dipanggil secara 'live' dari HTML untuk update Sheet Markah Murid & Tab Khas TUGASAN UMUM
+// Fungsi dipanggil secara 'live' dari HTML untuk update Sheet Markah Murid
 function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     let sheet = ss.getSheetByName("Markah Murid");
     
-    // Cipta atau naik taraf lajur "Markah Murid" secara automatik untuk 10 lajur
+    // Cipta atau semak lajur "Markah Murid" (10 lajur rasmi)
     const headerRow = ["Waktu Menjawab", "ID Soalan", "Nama Murid", "Email Murid", "Kelas", "Tugasan", "Markah (%)", "Status", "Status Sync GC", "Kod Unik"];
     if (!sheet) {
       sheet = ss.insertSheet("Markah Murid");
@@ -711,7 +711,7 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
           break;
         }
       } else {
-        // Mod Umum (Guest / Tanpa E-mel): padankan dengan Nama Murid dan Kod/Kelas
+        // Mod Tugasan Umum / Guest: padankan dengan Nama Murid dan Kod Unik / Kelas
         const matchKod = kod ? (rowKod === cleanKodUpper) : (rowKelas === cleanKelasUpper);
         if (rowQid === qid && rowNama === cleanNamaUpper && matchKod) {
           rowIdx = i + 1;
@@ -735,68 +735,6 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
       sheet.getRange(rowIdx, 1, 1, numCols).setValues([rowData.slice(0, numCols)]);
     } else {
       sheet.appendRow(rowData);
-    }
-
-    // ========================================================
-    // TAB KHAS SPREADSHEET: TUGASAN UMUM
-    // Merekodkan semua pelajar yang menyiapkan Tugasan Umum
-    // ========================================================
-    try {
-      let sheetUmum = ss.getSheetByName("TUGASAN UMUM");
-      const headerRowUmum = [
-        "Timestamp",
-        "Kod Tugasan",
-        "ID Soalan",
-        "Kelas",
-        "Nama Pelajar (Huruf Besar)",
-        "Markah (%)",
-        "Status",
-        "Tajuk / Bab",
-        "Nama Guru"
-      ];
-      if (!sheetUmum) {
-        sheetUmum = ss.insertSheet("TUGASAN UMUM");
-        sheetUmum.getRange(1, 1, 1, 9).setValues([headerRowUmum]);
-        sheetUmum.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#059669").setFontColor("#ffffff");
-        sheetUmum.setFrozenRows(1);
-      }
-      
-      const dataUmum = sheetUmum.getDataRange().getValues();
-      let rowUmumIdx = -1;
-      
-      for (let u = 1; u < dataUmum.length; u++) {
-        const uKod = (dataUmum[u][1] || "").toString().trim().toUpperCase();
-        const uNama = (dataUmum[u][4] || "").toString().trim().toUpperCase();
-        const uKelas = (dataUmum[u][3] || "").toString().trim().toUpperCase();
-
-        if (cleanKodUpper && uKod === cleanKodUpper && uNama === cleanNamaUpper) {
-          rowUmumIdx = u + 1;
-          break;
-        } else if (!cleanKodUpper && uNama === cleanNamaUpper && uKelas === cleanKelasUpper) {
-          rowUmumIdx = u + 1;
-          break;
-        }
-      }
-      
-      const umumDataRow = [
-        timestamp,
-        cleanKodUpper || "UMUM",
-        qid,
-        cleanKelasUpper || "Tiada Kelas",
-        cleanNamaUpper,
-        markahStr,
-        status,
-        tugasan || "-",
-        ""
-      ];
-      
-      if (rowUmumIdx !== -1) {
-        sheetUmum.getRange(rowUmumIdx, 1, 1, 9).setValues([umumDataRow]);
-      } else {
-        sheetUmum.appendRow(umumDataRow);
-      }
-    } catch (errUmum) {
-      console.error("Gagal simpan ke tab TUGASAN UMUM:", errUmum);
     }
   } catch (e) {
     console.error(e);

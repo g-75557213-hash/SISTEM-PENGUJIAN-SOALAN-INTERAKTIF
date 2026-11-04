@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
-import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet } from '../lib/sheets';
+import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
 import { createAssignment, deleteAssignment } from '../lib/classroom';
 import { logout } from '../lib/firebase';
@@ -87,7 +87,7 @@ export default function BankSoalan({
       console.warn("Ralat membaca localStorage tugasan umum:", e);
     }
 
-    // 2. Fetch server data and merge
+    // 2. Fetch server and Google Sheets TUGASAN UMUM data and merge
     try {
       setIsLoadingPublic(true);
       const res = await fetch(`/api/tugasan-umum?qid=${encodeURIComponent(q.idSoalan)}`);
@@ -95,7 +95,6 @@ export default function BankSoalan({
         const data = await res.json();
         if (Array.isArray(data)) {
           const map = new Map<string, any>();
-          // Seed with local items for this question
           try {
             const stored = localStorage.getItem('sistem_tugasan_umum_list');
             if (stored) {
@@ -105,6 +104,34 @@ export default function BankSoalan({
           } catch (e) {}
           data.forEach(item => map.set(item.kod, item));
           setPublicExistingList(Array.from(map.values()));
+        }
+      }
+
+      // Merge from teacher's Google Sheets "TUGASAN UMUM" tab
+      if (token && spreadsheetId) {
+        try {
+          const sheetItems = await getTugasanUmumRowsFromSheet(token, spreadsheetId);
+          const forThisQ = sheetItems.filter(item => item.qid === q.idSoalan);
+          if (forThisQ.length > 0) {
+            setPublicExistingList(prev => {
+              const map = new Map<string, any>();
+              prev.forEach(p => map.set(p.kod, p));
+              forThisQ.forEach(s => {
+                if (!map.has(s.kod)) {
+                  map.set(s.kod, {
+                    kod: s.kod,
+                    qid: s.qid,
+                    kelas: s.kelas,
+                    linkSoalan: s.link,
+                    createdAt: 'Google Sheets'
+                  });
+                }
+              });
+              return Array.from(map.values());
+            });
+          }
+        } catch (eSheet) {
+          console.warn("Gagal membaca dari helaian TUGASAN UMUM:", eSheet);
         }
       }
     } catch (err) {
@@ -164,9 +191,17 @@ export default function BankSoalan({
       console.warn("Gagal simpan ke localStorage:", e);
     }
 
-    // Auto ensure tab TUGASAN UMUM exists in teacher's Google Spreadsheet
+    // 3. Save 4 columns to tab TUGASAN UMUM in teacher's Google Spreadsheet:
+    // [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum]
     if (token && spreadsheetId) {
-      ensureTugasanUmumSheet(token, spreadsheetId).catch(() => {});
+      saveTugasanUmumRowToSheet(token, spreadsheetId, {
+        kod: finalKod,
+        qid: publicModalQ.idSoalan,
+        kelas: finalKelas,
+        link: generatedUrl
+      }).catch(errSheet => {
+        console.warn("Gagal merekod ke tab TUGASAN UMUM Google Sheets:", errSheet);
+      });
     }
 
     // 3. Sync to server in background
@@ -1202,6 +1237,9 @@ export default function BankSoalan({
                                   try {
                                     await fetch(`/api/tugasan-umum/${encodeURIComponent(item.kod)}`, { method: 'DELETE' });
                                   } catch (e) {}
+                                  if (token && spreadsheetId) {
+                                    deleteTugasanUmumRowFromSheet(token, spreadsheetId, item.kod).catch(() => {});
+                                  }
                                 }
                               }}
                               className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
