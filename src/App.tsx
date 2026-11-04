@@ -392,10 +392,14 @@ function doGet(e) {
                          .setMimeType(ContentService.MimeType.JSON);
   }
 
-  const qid = e.parameter.qid || e.parameter.sid;
-  if (!qid) {
+  let rawQid = (e.parameter.qid || e.parameter.sid || "").toString().trim();
+  if (!rawQid) {
     return HtmlService.createHtmlOutput("<h2>Ralat Parameter</h2><p>Sila sertakan ID dalam pautan (e.g., ?qid=SQ-0001 atau ?sid=SS-0001).</p>");
   }
+  // Tanggalkan kod sampingan jika qid tercantum seperti 'SQ-0001+TU-123'
+  let qid = rawQid;
+  if (qid.indexOf(" ") > -1) qid = qid.split(" ")[0].trim();
+  if (qid.indexOf("+") > -1) qid = qid.split("+")[0].trim();
 
   // Tangkap parameter kelas, tugasan, kod dan mod dari URL (dengan fallback)
   let kelas = e.parameter.kelas || "";
@@ -435,29 +439,40 @@ function doGet(e) {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     let htmlCode = "";
     
+    // OPTIMASI: Cuba dapatkan HTML daripada Cache terlebih dahulu (sekelip mata)
+    try {
+      const cachedHtml = CacheService.getScriptCache().get("qid_" + qid);
+      if (cachedHtml) {
+        htmlCode = cachedHtml;
+      }
+    } catch(cErr) {}
+
     // CARI DALAM TAB SIMULASI (Jika ID bermula dengan SS- atau demo ID)
-    if (qid.startsWith("SS-") || qid === "sim_ketumpatan" || qid === "sim_bandul") {
+    if (!htmlCode && (qid.startsWith("SS-") || qid === "sim_ketumpatan" || qid === "sim_bandul")) {
       const sheetSim = ss.getSheetByName("SIMULASI");
       if (sheetSim) {
         const lastRow = sheetSim.getLastRow();
         const lastCol = sheetSim.getLastColumn();
         if (lastRow >= 2) {
-          const data = sheetSim.getRange(1, 1, lastRow, lastCol).getValues();
-          const header = data[0];
-          // Cari kolum ID SIMULASI (indeks 6 / G)
-          const idIndex = header.indexOf("ID SIMULASI") > -1 ? header.indexOf("ID SIMULASI") : 6;
+          const header = sheetSim.getRange(1, 1, 1, lastCol).getValues()[0];
+          const idCol = (header.indexOf("ID SIMULASI") > -1 ? header.indexOf("ID SIMULASI") : 6) + 1;
+          const idList = sheetSim.getRange(2, idCol, lastRow - 1, 1).getValues();
           
-          for (let i = 1; i < data.length; i++) {
-            let currentId = data[i][idIndex] ? data[i][idIndex].toString().trim() : "";
-            if (currentId === qid) {
-              // Gabungkan HTML dari kolum E (4), F (5) dan I (8) onwards
-              htmlCode = (data[i][4] || "") + (data[i][5] || "");
-              if (data[i].length > 8) {
-                for (let j = 8; j < data[i].length; j++) {
-                  htmlCode += (data[i][j] || "");
-                }
-              }
+          let targetRow = -1;
+          for (let i = 0; i < idList.length; i++) {
+            if (idList[i][0] && idList[i][0].toString().trim() === qid) {
+              targetRow = i + 2;
               break;
+            }
+          }
+          
+          if (targetRow > -1) {
+            const rowData = sheetSim.getRange(targetRow, 1, 1, lastCol).getValues()[0];
+            htmlCode = (rowData[4] || "") + (rowData[5] || "");
+            if (rowData.length > 8) {
+              for (let j = 8; j < rowData.length; j++) {
+                htmlCode += (rowData[j] || "");
+              }
             }
           }
         }
@@ -473,31 +488,42 @@ function doGet(e) {
       }
     }
 
-    // CARI DALAM TAB SOALAN (Jika belum jumpa atau ID bermula dengan SQ-)
+    // CARI DALAM TAB SOALAN (Optimasi: Baca hanya kolum ID dahulu, kemudian baris sasaran sahaja)
     if (!htmlCode) {
       const sheet = ss.getSheetByName(SHEET_NAME);
       if (sheet) {
         const lastRow = sheet.getLastRow();
         const lastCol = sheet.getLastColumn();
         if (lastRow >= 2) {
-          const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-          const header = data[0];
+          const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
           const htmlIndex = header.indexOf("CODE HTML");
           const idIndex = header.indexOf("ID Soalan");
           
           if (htmlIndex > -1 && idIndex > -1) {
-            for (let i = 1; i < data.length; i++) {
-              let currentId = data[i][idIndex] ? data[i][idIndex].toString().trim() : "";
-              if (currentId === qid) { 
-                // Gabungkan HTML dari kolum HTML dan kolum selepas Link (J onwards)
-                htmlCode = data[i][htmlIndex]; 
-                // Kolum J adalah index 9
-                if (data[i].length > 9) {
-                  for (let j = 9; j < data[i].length; j++) {
-                    htmlCode += (data[i][j] || "");
-                  }
-                }
+            // Baca HANYA kolum ID (sangat pantas berbanding membaca semua sel HTML)
+            const idList = sheet.getRange(2, idIndex + 1, lastRow - 1, 1).getValues();
+            let targetRow = -1;
+            for (let i = 0; i < idList.length; i++) {
+              if (idList[i][0] && idList[i][0].toString().trim() === qid) {
+                targetRow = i + 2; // +2 kerana row 1 adalah header, indeks 0 adalah row 2
                 break;
+              }
+            }
+            
+            if (targetRow > -1) {
+              // Baca HANYA baris soalan ini sahaja (menjimatkan 80-90% masa I/O Sheets)
+              const rowData = sheet.getRange(targetRow, 1, 1, lastCol).getValues()[0];
+              htmlCode = rowData[htmlIndex] || "";
+              if (rowData.length > 9) {
+                for (let j = 9; j < rowData.length; j++) {
+                  htmlCode += (rowData[j] || "");
+                }
+              }
+              // Simpan dalam cache Apps Script (jika saiz bawah 90KB) untuk murid berikutnya
+              if (htmlCode && htmlCode.length < 90000) {
+                try {
+                  CacheService.getScriptCache().put("qid_" + qid, htmlCode, 21600); // Cache 6 jam
+                } catch(eCache) {}
               }
             }
           }
@@ -507,32 +533,27 @@ function doGet(e) {
     
     if (!htmlCode) return HtmlService.createHtmlOutput("<h2>Ralat</h2><p>Data tidak dijumpai bagi ID: " + qid + "</p>");
     
-    // Tarik data e-mel pelajar yang sedang buka link
+    // Tarik data e-mel pelajar jika BUKAN Tugasan Umum (Langkau Classroom API jika Mod Umum untuk menjimatkan masa)
     let userEmail = "";
-    try { 
-      const activeEmail = Session.getActiveUser().getEmail();
-      if (activeEmail) {
-        userEmail = activeEmail;
-      }
-    } catch (err) {
-      userEmail = ""; 
-    }
-    
     let userName = "";
-    try {
-      if (userEmail) {
-        // Tarik nama dari Google Classroom jika e-mel sah DELIMa
-        const profile = Classroom.UserProfiles.get(userEmail);
-        userName = profile.name.fullName;
-      }
-    } catch (apiErr) {
-      if (userEmail) userName = userEmail.split('@')[0].toUpperCase(); 
-    }
     
-    // Jika bukan akaun DELIMa (tidak berakhir dengan moe-dl.edu.my), kosongkan untuk paksa Popup Manual Entry
-    if (userEmail && !userEmail.toLowerCase().endsWith("moe-dl.edu.my")) {
-      userEmail = "";
-      userName = "";
+    if (!isUmumMode) {
+      try { 
+        const activeEmail = Session.getActiveUser().getEmail();
+        if (activeEmail && activeEmail.toLowerCase().endsWith("moe-dl.edu.my")) {
+          userEmail = activeEmail;
+          try {
+            // Tarik nama dari Google Classroom jika e-mel sah DELIMa
+            const profile = Classroom.UserProfiles.get(userEmail);
+            userName = profile.name.fullName;
+          } catch (apiErr) {
+            userName = userEmail.split('@')[0].toUpperCase(); 
+          }
+        }
+      } catch (err) {
+        userEmail = ""; 
+        userName = "";
+      }
     }
     userEmail = userEmail || "";
     userName = userName || "";
@@ -665,9 +686,24 @@ function kemaskiniMarkah(qid, nama, email, kelas, tugasan, kod, markah, status) 
     
     // Semak jika pelajar ini dah pernah buka/jawab soalan ini
     for (let i = 1; i < data.length; i++) {
-      if (data[i][1] === qid && data[i][3] === email) {
-        rowIdx = i + 1;
-        break;
+      const rowQid = (data[i][1] || "").toString().trim();
+      const rowNama = (data[i][2] || "").toString().trim().toUpperCase();
+      const rowEmail = (data[i][3] || "").toString().trim().toLowerCase();
+      const rowKelas = (data[i][4] || "").toString().trim().toUpperCase();
+      const rowKod = (data[i][9] || "").toString().trim().toUpperCase();
+
+      if (email) {
+        if (rowQid === qid && rowEmail === email.toLowerCase().trim()) {
+          rowIdx = i + 1;
+          break;
+        }
+      } else {
+        // Mod Umum (Guest / Tanpa E-mel): padankan dengan Nama Murid dan Kod/Kelas
+        const matchKod = kod ? (rowKod === kod.toUpperCase().trim()) : (rowKelas === (kelas || "").toUpperCase().trim());
+        if (rowQid === qid && rowNama === (nama || "").toUpperCase().trim() && matchKod) {
+          rowIdx = i + 1;
+          break;
+        }
       }
     }
     

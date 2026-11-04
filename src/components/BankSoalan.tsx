@@ -87,6 +87,18 @@ export default function BankSoalan({
     }
   };
 
+  const getPublicQuizUrl = (qid: string, kod: string, kelas: string, linkSoalan?: string) => {
+    let baseUrl = '';
+    if (linkSoalan && linkSoalan.startsWith('https://script.google.com')) {
+      baseUrl = linkSoalan.split('?')[0];
+    } else if (gasWebAppUrl && gasWebAppUrl.startsWith('https://script.google.com')) {
+      baseUrl = gasWebAppUrl.split('?')[0];
+    } else {
+      baseUrl = 'https://script.google.com/macros/s/AKfycbyBL3nng7I0_ADtD7raoMJhrw1Z41KU_dnxBQi9cYRr2WbfD59kLnPvKsazRcz6-H2acg/exec';
+    }
+    return `${baseUrl}?qid=${encodeURIComponent(qid)}&kod=${encodeURIComponent(kod)}&kelas=${encodeURIComponent(kelas)}&mod=umum`;
+  };
+
   const handleCreatePublicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!publicModalQ || !publicKelasInput.trim()) {
@@ -116,7 +128,7 @@ export default function BankSoalan({
       });
 
       if (res.ok) {
-        const generatedUrl = `${window.location.origin}/?qid=${publicModalQ.idSoalan}&kod=${encodeURIComponent(finalKod)}&kelas=${encodeURIComponent(finalKelas)}&mod=umum`;
+        const generatedUrl = getPublicQuizUrl(publicModalQ.idSoalan, finalKod, finalKelas, publicModalQ.linkSoalan);
         setPublicGeneratedLink(generatedUrl);
         
         // Refresh list
@@ -1029,6 +1041,16 @@ export default function BankSoalan({
                     />
                   </div>
 
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
+                    <span className="text-base shrink-0">💡</span>
+                    <div>
+                      <span className="font-bold">Akses Tanpa Login (Mod Guest):</span> Pautan ini menggunakan Web App Google Apps Script. Pastikan di Apps Script, tetapan Deploy ditetapkan kepada:
+                      <div className="font-semibold mt-0.5">• Execute as: <span className="underline">Me</span> (Akaun Guru)</div>
+                      <div className="font-semibold">• Who has access: <span className="underline">Anyone</span> (Sesiapa sahaja)</div>
+                      Dengan ini, murid di mana-mana peranti boleh terus menjawab tanpa log masuk Google.
+                    </div>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
                     <button
                       onClick={() => {
@@ -1077,7 +1099,7 @@ export default function BankSoalan({
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {publicExistingList.map((item, idx) => {
-                      const itemUrl = `${window.location.origin}/?qid=${item.qid}&kod=${encodeURIComponent(item.kod)}&kelas=${encodeURIComponent(item.kelas)}&mod=umum`;
+                      const itemUrl = getPublicQuizUrl(item.qid, item.kod, item.kelas, publicModalQ?.linkSoalan);
                       return (
                         <div key={item.kod || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs">
                           <div className="min-w-0 flex-1">
