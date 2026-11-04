@@ -1,75 +1,50 @@
-# Pelan Pelaksanaan: Pengesahan Nama Penuh Murid Bagi Tugasan Umum
+# Pelan Pelaksanaan: Pengasingan Tegas Data Tugasan Umum Daripada Data Wayground
 
-Memastikan soalan Tugasan Umum (Mod Umum) **SENTIASA** memaparkan borang pengesahan murid yang meminta **NAMA PENUH (HURUF BESAR)** dan **KELAS**, tanpa mengira sama ada peranti/penyemak imbas Chrome tersebut mempunyai akaun Google/Chrome terlog masuk atau menggunakan profil Chrome Guest.
-
-> [!IMPORTANT]
-> Perubahan ini adalah **khusus untuk Tugasan Umum sahaja**. Tugasan Google Classroom biasa akan kekal menggunakan pengesahan DELIMa/Google Classroom sedia ada.
+Analisis imej yang dimuat naik menunjukkan rekod **WAYGROUND** (seperti murid `NUR MOE`, Kod `WG-870581048881`) serta nilai markah `NaN%` telah termasuk ke dalam Jadual Markah Tugasan Umum. Pelan ini bertujuan mengasingkan data Tugasan Umum secara menyeluruh supaya hanya rekod dari pautan Tugasan Umum (kod bermula `TU-` atau berdaftar di tab `TUGASAN UMUM`) yang dipaparkan.
 
 ---
 
-## 1. Gambaran Keseluruhan & Konsep Utama
+## 1. Analisis & Punca Masalah
 
-- **Masalah:** Apabila beberapa murid menggunakan komputer/Chrome yang sama (atau akaun Chrome Guest yang sama), borang soalan kadang-kadang auto-isi nama murid sebelum ini daripada `localStorage` atau mengesan akaun Chrome semasa.
-- **Penyelesaian:** 
-  1. Dalam **Mod Tugasan Umum**, pembolehubah nama murid (`publicNama`) **TIDAK AKAN DIBACA daripada `localStorage`** semasa muat mula (*initial load*).
-  2. Borang pengesahan murid (*Student Identity Verification Modal*) akan **sentiasa dipaparkan secara mandatori** dengan ruang nama yang **KOSONG (`""`)** setiap kali pautan soalan dibuka.
-  3. Pelajar **wajib memasukkan Nama Penuh rasmi dalam HURUF BESAR** dan menekan butang *"Mula Menjawab Tugasan ➔"* untuk memulakan kuiz.
+1. **Penyusupan Data Wayground ke Tugasan Umum:**
+   - Dalam fungsi `loadTugasanUmumData()` pada `SemakanGuru.tsx`, carian rekod dari tab `Markah Murid` menganggap sebarang baris tanpa e-mel (`!row.email`) sebagai Tugasan Umum.
+   - Disebabkan rekod Wayground juga tidak mempunyai e-mel pelajar Google Classroom, rekod berkod `WG-` dan ber-ID `WAYGROUND` telah diserap ke dalam senarai Tugasan Umum.
 
----
-
-## 2. Pengalaman Pengguna (UX) & Aliran Paparan
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Murid Buka Pautan Umum                          │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│               Modals Pengesahan Murid (Sentiasa Muncul)               │
-│                                                                        │
-│   🎓 MOD UMUM • TIADA LOG MASUK DIPERLUKAN                             │
-│   ------------------------------------------------                  │
-│   NAMA PENUH (HURUF BESAR) *                                           │
-│   [   CONTOH: AHMAD BIN ABDULLAH                            ] (Kosong) │
-│                                                                        │
-│   KELAS *                                                              │
-│   [   1 ABU BAKAR                                           ]          │
-│                                                                        │
-│   [ Mula Menjawab Tugasan ➔ ]                                         │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     Soalan Interaktif Dipaparkan                       │
-│     (Markah dihantar menggunakan Nama & Kelas yang baru ditaip)        │
-└────────────────────────────────────────────────────────────────────────┘
-```
+2. **Isu Paparan Markah `NaN%`:**
+   - Dalam jadual `filteredUmumSubmissions`, penukaran nilai markah yang tidak sah (`"NaN"` atau string tidak nombor) ke `Number(sub.markah)` menghasilkan `NaN`, yang dipaparkan sebagai `NaN%`.
 
 ---
 
-## 3. Keputusan Utama & Strategi Teknikal
+## 2. Pelan Penyelesaian & Perubahan
 
-1. **`src/components/StudentView.tsx`**:
-   - Memadamkan auto-fill nama daripada `localStorage` untuk Tugasan Umum.
-   - Memastikan `publicNama` sentiasa di-reset kepada string kosong (`""`) setiap kali pautan Tugasan Umum dibuka.
-   - Mengekalkan penukaran automatik kepada **HURUF BESAR** semasa murid menaip (`onInput` & `onChange`).
+### A. Pengasingan Penapis Data (`src/components/SemakanGuru.tsx`)
+- **Penapis Pilihan Rekod Tugasan Umum:**
+  - Menetapkan syarat bahawa sesuatu rekod adalah **Tugasan Umum** HANYA JIKA kod uniknya bermula dengan `TU-` ATAU wujud secara sah dalam senarai pautan Tugasan Umum yang dicipta guru.
+  - **Pengecualian Mutlak Wayground:** Menapis dan menolak secara tegas sebarang rekod yang mempunyai:
+    - Kod bermula `WG-`
+    - `qid === 'WAYGROUND'`
+    - `tugasan === 'WAYGROUND'` / `bab === 'WAYGROUND'`
 
-2. **`Code.gs` & `src/App.tsx` (`appsScriptCode`)**:
-   - Memastikan dalam `doGet(e)`, jika `isUmumMode` adalah `true`, nilai `userEmail` dan `userName` diset secara tegas kepada string kosong (`""`).
-   - Pop-up skrip `delima-login-popup` untuk Tugasan Umum tidak akan mengisi petak `#input-nama` dengan sebarang nilai terdahulu, memastikan petak tersebut sentiasa bersih dan sedia untuk murid baru.
+### B. Penapisan Pada Laluan Pelayan (`server.ts`)
+- Dalam laluan `/api/tugasan-umum-submissions`, pastikan mana-mana rekod penyerahan dengan kod `WG-` atau ID `WAYGROUND` tidak dikembalikan dalam senarai penyerahan umum.
 
-3. **Integriti Penyimpanan Markah:**
-   - Markah tetap direkodkan terus ke tab **`Markah Murid`** dalam Google Spreadsheet guru dengan nama penuh murid (HURUF BESAR), kelas, dan `Kod Unik` tugasan.
+### C. Pembaikan Paparan Markah & Pengendalian `NaN%`
+- Dalam jadual `SemakanGuru.tsx` (baris 1144), perkemaskan penukaran markah:
+  ```typescript
+  const numMark = sub.markah !== null && sub.markah !== undefined ? parseFloat(String(sub.markah).replace('%', '')) : null;
+  const mark = (numMark !== null && !isNaN(numMark)) ? numMark : null;
+  ```
+  - Jika markah adalah `null` atau `NaN`, jadual akan memaparkan lencana kelabu `-` yang kemas dan bukannya `NaN%`.
 
 ---
 
-## 4. Pelan Langkah Demi Langkah
+## 3. Langkah Demi Langkah Pelaksanaan
 
-1. **Kemaskini `src/components/StudentView.tsx`**:
-   - Reset `publicNama = ""` semasa komponen dimuatkan untuk Mod Umum.
-2. **Kemaskini `Code.gs` & `src/App.tsx`**:
-   - Paksa `userEmail = ""` dan `userName = ""` dalam `doGet` apabila `isUmumMode` diaktifkan.
-   - Kemaskini pembinaan HTML pop-up supaya petak nama sentiasa kosong.
+1. **Kemaskini `src/components/SemakanGuru.tsx`**:
+   - Kemaskini `loadTugasanUmumData()` untuk menapis dan menolak semua entri berkod `WG-` dan `WAYGROUND`.
+   - Kemaskini pemprosesan markah murid dalam jadual Tugasan Umum untuk mengendalikan nilai `NaN` secara selamat.
+2. **Kemaskini `server.ts`**:
+   - Kemaskini endpoint `/api/tugasan-umum-submissions` untuk mengecualikan rekod `WG-`.
 3. **Pengesahan & Ujian Build**:
-   - Jalankan `lint_applet` dan `compile_applet` untuk memastikan tiada ralat sintaks.
+   - Jalankan `lint_applet` dan `compile_applet`.
+   - Muat semula dev server dan sahkan bahawa hanya data Tugasan Umum yang dipaparkan.

@@ -130,8 +130,13 @@ export default function SemakanGuru({
           const dataS = await resSubs.json();
           if (Array.isArray(dataS)) {
             dataS.forEach(item => {
-              const k = `${(item.kod || 'UMUM').toUpperCase()}_${(item.nama || '').toUpperCase()}_${item.qid || ''}`;
-              submissionsMap.set(k, item);
+              const itemKod = (item.kod || 'UMUM').toUpperCase().trim();
+              const itemQid = (item.qid || '').toUpperCase().trim();
+              const itemBab = (item.bab || '').toUpperCase().trim();
+              if (!itemKod.startsWith('WG-') && itemQid !== 'WAYGROUND' && itemBab !== 'WAYGROUND') {
+                const k = `${itemKod}_${(item.nama || '').toUpperCase()}_${itemQid}`;
+                submissionsMap.set(k, item);
+              }
             });
           }
         }
@@ -144,24 +149,39 @@ export default function SemakanGuru({
         try {
           const mmRows = await getMarkahMurid(token, spreadsheetId);
           if (Array.isArray(mmRows) && mmRows.length > 0) {
-            const knownKods = new Set(allAssignments.map(a => (a.kod || '').toUpperCase()));
-            const knownClasses = new Set(allAssignments.map(a => (a.kelas || '').toUpperCase()));
+            const knownKods = new Set(allAssignments.map(a => (a.kod || '').toUpperCase().trim()));
 
             mmRows.forEach(row => {
               const rowKod = (row.kodUnik || '').toUpperCase().trim();
-              const rowKelas = (row.kelas || '').toUpperCase().trim();
-              const isUmum = rowKod.startsWith('TU-') || knownKods.has(rowKod) || !row.email || (knownClasses.has(rowKelas) && !row.email);
+              const rowQid = (row.qid || '').toUpperCase().trim();
+              const rowTugasan = (row.tugasan || '').toUpperCase().trim();
 
-              if (isUmum) {
+              // SEKAT DATA WAYGROUND DARI DIMAUKAN KE TUGASAN UMUM!
+              const isWayground = rowKod.startsWith('WG-') || rowQid === 'WAYGROUND' || rowTugasan === 'WAYGROUND';
+
+              // HANYA data Tugasan Umum yang SAH (Kod bermula TU- atau wujud dalam senarai Tugasan Umum)
+              const isUmumAssignment = (rowKod.startsWith('TU-') || knownKods.has(rowKod)) && !isWayground;
+
+              if (isUmumAssignment) {
                 const cleanNama = (row.nama || '').toUpperCase().trim();
                 const matchedAssn = allAssignments.find(a => (a.kod || '').toUpperCase() === rowKod);
-                const k = `${rowKod || 'UMUM'}_${cleanNama}_${row.qid}`;
+                const k = `${rowKod}_${cleanNama}_${row.qid}`;
+
+                // Process markah safely to prevent NaN
+                let safeMark = row.markah;
+                if (safeMark !== undefined && safeMark !== null) {
+                  const parsed = parseFloat(String(safeMark).replace('%', ''));
+                  safeMark = !isNaN(parsed) ? parsed : null;
+                } else {
+                  safeMark = null;
+                }
+
                 submissionsMap.set(k, {
                   kod: rowKod || matchedAssn?.kod || 'UMUM',
                   qid: row.qid,
                   kelas: row.kelas,
                   nama: cleanNama,
-                  markah: row.markah !== undefined && row.markah !== null ? row.markah : null,
+                  markah: safeMark,
                   status: row.status || 'Selesai',
                   updatedAt: row.timestamp,
                   bab: matchedAssn?.bab || row.tugasan || '',
@@ -1141,7 +1161,8 @@ export default function SemakanGuru({
                   <tbody className="divide-y divide-slate-100">
                     {filteredUmumSubmissions.map((sub, idx) => {
                       const assn = tugasanUmumList.find(a => a.kod === sub.kod);
-                      const mark = sub.markah !== null && sub.markah !== undefined ? Number(sub.markah) : null;
+                      const parsedMark = sub.markah !== null && sub.markah !== undefined ? parseFloat(String(sub.markah).replace('%', '')) : null;
+                      const mark = (parsedMark !== null && !isNaN(parsedMark)) ? parsedMark : null;
                       
                       let markColor = "bg-slate-100 text-slate-700 border-slate-200";
                       let markLabel = "-";

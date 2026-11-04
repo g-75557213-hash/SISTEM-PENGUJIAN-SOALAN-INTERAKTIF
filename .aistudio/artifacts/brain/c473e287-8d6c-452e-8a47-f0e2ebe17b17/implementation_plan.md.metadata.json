@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan pelaksanaan untuk memastikan Tugasan Umum sentiasa meminta nama penuh pelajar dalam HURUF BESAR walaupun menggunakan akaun Chrome atau Chrome Guest.",
-  "updatedAt": "2026-11-04T02:11:15.843270725Z",
+  "summary": "Pelan pelaksanaan untuk memisahkan data Tugasan Umum secara tegas daripada data Wayground dan membaiki paparan markah NaN%.",
+  "updatedAt": "2026-11-04T03:15:51.815980473Z",
   "requestFeedback": true,
   "userFacing": true
 }

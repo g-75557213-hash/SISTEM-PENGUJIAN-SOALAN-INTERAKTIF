@@ -430,8 +430,14 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
       inMemorySubmissions.forEach((val, key) => {
         let match = true;
-        if (kod && val.kod !== String(kod).toUpperCase().trim()) match = false;
-        if (qid && val.qid !== String(qid)) match = false;
+        const valKod = (val.kod || '').toUpperCase().trim();
+        const valQid = (val.qid || '').toUpperCase().trim();
+        const valBab = (val.bab || '').toUpperCase().trim();
+        if (valKod.startsWith('WG-') || valQid === 'WAYGROUND' || valBab === 'WAYGROUND') {
+          match = false;
+        }
+        if (kod && valKod !== String(kod).toUpperCase().trim()) match = false;
+        if (qid && valQid !== String(qid).toUpperCase().trim()) match = false;
         if (match) resultsMap.set(key, val);
       });
 
@@ -447,6 +453,11 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         snapshot.forEach((doc: any) => {
           const data = doc.data();
           if (!data) return;
+          const dataKod = (data.kod || '').toUpperCase().trim();
+          const dataQid = (data.qid || '').toUpperCase().trim();
+          const dataBab = (data.bab || '').toUpperCase().trim();
+          if (dataKod.startsWith('WG-') || dataQid === 'WAYGROUND' || dataBab === 'WAYGROUND') return;
+
           let updatedAtStr = "";
           if (data.updatedAt) {
             try {
