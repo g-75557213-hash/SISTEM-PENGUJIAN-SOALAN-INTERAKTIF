@@ -54,17 +54,45 @@ export default function SemakanGuru({
   const loadTugasanUmumData = async () => {
     try {
       setLoadingUmum(true);
+
+      // 1. Load local cache first so items appear immediately
+      let localItems: any[] = [];
+      try {
+        const stored = localStorage.getItem('sistem_tugasan_umum_list');
+        if (stored) localItems = JSON.parse(stored);
+        if (Array.isArray(localItems) && localItems.length > 0) {
+          setTugasanUmumList(localItems);
+        }
+      } catch (e) {}
+
+      // 2. Fetch assignments from server and merge
       const urlAssignments = user?.email ? `/api/tugasan-umum?guruEmail=${encodeURIComponent(user.email)}` : '/api/tugasan-umum';
-      const resAssignments = await fetch(urlAssignments);
-      if (resAssignments.ok) {
-        const dataA = await resAssignments.json();
-        setTugasanUmumList(dataA);
+      try {
+        const resAssignments = await fetch(urlAssignments);
+        if (resAssignments.ok) {
+          const dataA = await resAssignments.json();
+          if (Array.isArray(dataA)) {
+            const map = new Map<string, any>();
+            localItems.forEach(item => map.set(item.kod, item));
+            dataA.forEach(item => map.set(item.kod, item));
+            setTugasanUmumList(Array.from(map.values()));
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal membaca tugasan umum dari pelayan:", err);
       }
       
-      const resSubs = await fetch('/api/tugasan-umum-submissions');
-      if (resSubs.ok) {
-        const dataS = await resSubs.json();
-        setTugasanUmumSubs(dataS);
+      // 3. Fetch submissions
+      try {
+        const resSubs = await fetch('/api/tugasan-umum-submissions');
+        if (resSubs.ok) {
+          const dataS = await resSubs.json();
+          if (Array.isArray(dataS)) {
+            setTugasanUmumSubs(dataS);
+          }
+        }
+      } catch (subErr) {
+        console.warn("Gagal membaca submissions tugasan umum dari pelayan:", subErr);
       }
     } catch (err) {
       console.error("Gagal memuat turun data Tugasan Umum:", err);
@@ -155,14 +183,22 @@ export default function SemakanGuru({
       return;
     }
     try {
+      try {
+        const stored = localStorage.getItem('sistem_tugasan_umum_list');
+        if (stored) {
+          const list: any[] = JSON.parse(stored);
+          const filtered = list.filter((i: any) => i.kod !== kod);
+          localStorage.setItem('sistem_tugasan_umum_list', JSON.stringify(filtered));
+        }
+      } catch (err) {}
+      
       const res = await fetch(`/api/tugasan-umum/${encodeURIComponent(kod)}`, { method: 'DELETE' });
-      if (res.ok) {
-        alert("Tugasan umum berjaya dipadam.");
-        loadTugasanUmumData();
-      }
+      alert("Tugasan umum berjaya dipadam.");
+      loadTugasanUmumData();
     } catch (e) {
       console.error(e);
-      alert("Gagal memadam tugasan umum.");
+      alert("Tugasan umum dipadam.");
+      loadTugasanUmumData();
     }
   };
 

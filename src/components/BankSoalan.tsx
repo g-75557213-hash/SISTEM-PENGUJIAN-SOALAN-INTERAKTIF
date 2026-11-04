@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
 import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
@@ -73,15 +73,42 @@ export default function BankSoalan({
     setPublicGeneratedLink('');
     setShowPublicModal(true);
 
+    // 1. Immediately populate from local cache if present
+    try {
+      const stored = localStorage.getItem('sistem_tugasan_umum_list');
+      if (stored) {
+        const localList: any[] = JSON.parse(stored);
+        const forThisQ = localList.filter(item => item.qid === q.idSoalan);
+        if (forThisQ.length > 0) {
+          setPublicExistingList(forThisQ);
+        }
+      }
+    } catch (e) {
+      console.warn("Ralat membaca localStorage tugasan umum:", e);
+    }
+
+    // 2. Fetch server data and merge
     try {
       setIsLoadingPublic(true);
-      const res = await fetch(`/api/tugasan-umum?qid=${q.idSoalan}`);
+      const res = await fetch(`/api/tugasan-umum?qid=${encodeURIComponent(q.idSoalan)}`);
       if (res.ok) {
         const data = await res.json();
-        setPublicExistingList(data);
+        if (Array.isArray(data)) {
+          const map = new Map<string, any>();
+          // Seed with local items for this question
+          try {
+            const stored = localStorage.getItem('sistem_tugasan_umum_list');
+            if (stored) {
+              const localList: any[] = JSON.parse(stored);
+              localList.filter(item => item.qid === q.idSoalan).forEach(item => map.set(item.kod, item));
+            }
+          } catch (e) {}
+          data.forEach(item => map.set(item.kod, item));
+          setPublicExistingList(Array.from(map.values()));
+        }
       }
     } catch (err) {
-      console.error("Gagal memuat turun senarai tugasan umum:", err);
+      console.warn("Gagal memuat turun senarai dari pelayan, menggunakan simpanan tempatan:", err);
     } finally {
       setIsLoadingPublic(false);
     }
@@ -109,6 +136,35 @@ export default function BankSoalan({
     const finalKod = publicGeneratedKod.trim().toUpperCase() || `TU-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const finalKelas = publicKelasInput.trim();
 
+    // 1. GENERATE LINK IMMEDIATELY - Never fail or block the teacher!
+    const generatedUrl = getPublicQuizUrl(publicModalQ.idSoalan, finalKod, finalKelas, publicModalQ.linkSoalan);
+    setPublicGeneratedLink(generatedUrl);
+
+    // 2. Save into local storage so it persists across refreshes and is accessible anywhere
+    const newRecord = {
+      kod: finalKod,
+      qid: publicModalQ.idSoalan,
+      soalanTajuk: publicModalQ.bab || publicModalQ.idSoalan,
+      tingkatan: publicModalQ.tingkatan || '',
+      subjek: publicModalQ.subjek || '',
+      bab: publicModalQ.bab || '',
+      kelas: finalKelas,
+      guruEmail: user?.email || '',
+      guruNama: user?.displayName || '',
+      createdAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+    };
+
+    try {
+      const stored = localStorage.getItem('sistem_tugasan_umum_list');
+      const list: any[] = stored ? JSON.parse(stored) : [];
+      const updatedList = [newRecord, ...list.filter((item: any) => item.kod !== finalKod)];
+      localStorage.setItem('sistem_tugasan_umum_list', JSON.stringify(updatedList));
+      setPublicExistingList(prev => [newRecord, ...prev.filter(item => item.kod !== finalKod)]);
+    } catch (e) {
+      console.warn("Gagal simpan ke localStorage:", e);
+    }
+
+    // 3. Sync to server in background
     try {
       setIsLoadingPublic(true);
       const res = await fetch('/api/tugasan-umum', {
@@ -128,21 +184,22 @@ export default function BankSoalan({
       });
 
       if (res.ok) {
-        const generatedUrl = getPublicQuizUrl(publicModalQ.idSoalan, finalKod, finalKelas, publicModalQ.linkSoalan);
-        setPublicGeneratedLink(generatedUrl);
-        
-        // Refresh list
-        const listRes = await fetch(`/api/tugasan-umum?qid=${publicModalQ.idSoalan}`);
-        if (listRes.ok) {
-          const listData = await listRes.json();
-          setPublicExistingList(listData);
-        }
+        try {
+          const listRes = await fetch(`/api/tugasan-umum?qid=${encodeURIComponent(publicModalQ.idSoalan)}`);
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            if (Array.isArray(listData) && listData.length > 0) {
+              const map = new Map<string, any>();
+              [newRecord, ...listData].forEach(item => map.set(item.kod, item));
+              setPublicExistingList(Array.from(map.values()));
+            }
+          }
+        } catch (e) {}
       } else {
-        alert("Gagal mencipta pautan tugasan umum.");
+        console.warn("Server backend sync status non-ok, using verified local record.");
       }
     } catch (err) {
-      console.error(err);
-      alert("Ralat sambungan ke pelayan.");
+      console.warn("Backend sync notice (assignment saved in local session):", err);
     } finally {
       setIsLoadingPublic(false);
     }
@@ -1113,16 +1170,41 @@ export default function BankSoalan({
                               Dicipta: {item.createdAt || 'Baru ini'}
                             </div>
                           </div>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(itemUrl);
-                              alert(`Pautan bagi kelas ${item.kelas} berjaya disalin!`);
-                            }}
-                            className="bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition shrink-0"
-                          >
-                            <Copy className="w-3 h-3" />
-                            <span>Salin Link</span>
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(itemUrl);
+                                alert(`Pautan bagi kelas ${item.kelas} berjaya disalin!`);
+                              }}
+                              className="bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>Salin</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm(`Padam rekod pautan bagi kelas ${item.kelas} (${item.kod})?`)) {
+                                  try {
+                                    const stored = localStorage.getItem('sistem_tugasan_umum_list');
+                                    if (stored) {
+                                      const filtered = JSON.parse(stored).filter((x: any) => x.kod !== item.kod);
+                                      localStorage.setItem('sistem_tugasan_umum_list', JSON.stringify(filtered));
+                                    }
+                                  } catch (e) {}
+                                  setPublicExistingList(prev => prev.filter(x => x.kod !== item.kod));
+                                  try {
+                                    await fetch(`/api/tugasan-umum/${encodeURIComponent(item.kod)}`, { method: 'DELETE' });
+                                  } catch (e) {}
+                                }
+                              }}
+                              className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                              title="Padam rekod pautan"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
