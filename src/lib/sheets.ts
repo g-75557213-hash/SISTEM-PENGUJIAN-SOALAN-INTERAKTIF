@@ -1104,6 +1104,7 @@ export async function updateQuestionMetaInSheets(
  * 2. ID Soalan (cth: SQ-0827)
  * 3. Kelas (cth: 1 ABU BAKAR)
  * 4. Link tugasan umum
+ * 5. Nama Guru (cth: MEGAT CHAIREL ASHMAN)
  */
 export async function ensureTugasanUmumSheet(token: string, spreadsheetId: string): Promise<boolean> {
   try {
@@ -1141,10 +1142,10 @@ export async function ensureTugasanUmumSheet(token: string, spreadsheetId: strin
       }
     }
 
-    // Pastikan baris tajuk A1:D1 tepat mengikut spesifikasi 4 lajur:
-    // ["Kod Tugasan", "ID Soalan", "Kelas", "Link tugasan umum"]
-    const expectedHeaders = ["Kod Tugasan", "ID Soalan", "Kelas", "Link tugasan umum"];
-    const headRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:D1`, {
+    // Pastikan baris tajuk A1:E1 tepat mengikut spesifikasi 5 lajur:
+    // ["Kod Tugasan", "ID Soalan", "Kelas", "Link tugasan umum", "Nama Guru"]
+    const expectedHeaders = ["Kod Tugasan", "ID Soalan", "Kelas", "Link tugasan umum", "Nama Guru"];
+    const headRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:E1`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
@@ -1157,21 +1158,22 @@ export async function ensureTugasanUmumSheet(token: string, spreadsheetId: strin
         headData.values[0][0] === expectedHeaders[0] &&
         headData.values[0][1] === expectedHeaders[1] &&
         headData.values[0][2] === expectedHeaders[2] &&
-        headData.values[0][3] === expectedHeaders[3]
+        headData.values[0][3] === expectedHeaders[3] &&
+        headData.values[0][4] === expectedHeaders[4]
       ) {
         needUpdateHeaders = false;
       }
     }
 
     if (needUpdateHeaders) {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:D1?valueInputOption=USER_ENTERED`, {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A1:E1?valueInputOption=USER_ENTERED`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          range: 'TUGASAN UMUM!A1:D1',
+          range: 'TUGASAN UMUM!A1:E1',
           majorDimension: 'ROWS',
           values: [expectedHeaders]
         })
@@ -1187,7 +1189,7 @@ export async function ensureTugasanUmumSheet(token: string, spreadsheetId: strin
 
 /**
  * Menyimpan atau mengemaskini maklumat pautan tugasan umum ke tab "TUGASAN UMUM"
- * Lajur: [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum]
+ * Lajur: [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum, Nama Guru]
  */
 export async function saveTugasanUmumRowToSheet(
   token: string,
@@ -1197,6 +1199,7 @@ export async function saveTugasanUmumRowToSheet(
     qid: string;
     kelas: string;
     link: string;
+    namaGuru?: string;
   }
 ): Promise<boolean> {
   try {
@@ -1205,11 +1208,12 @@ export async function saveTugasanUmumRowToSheet(
     const cleanQid = String(data.qid || '').trim().toUpperCase();
     const cleanKelas = String(data.kelas || '').trim().toUpperCase();
     const cleanLink = String(data.link || '').trim();
+    const cleanNamaGuru = String(data.namaGuru || '').trim();
 
     if (!cleanKod) return false;
 
     // Dapatkan data sedia ada untuk semak jika kod sudah ada
-    const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:D`, {
+    const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:E`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
@@ -1226,18 +1230,18 @@ export async function saveTugasanUmumRowToSheet(
       }
     }
 
-    const rowValues = [cleanKod, cleanQid, cleanKelas, cleanLink];
+    const rowValues = [cleanKod, cleanQid, cleanKelas, cleanLink, cleanNamaGuru];
 
     if (targetRow !== -1) {
       // Kemaskini baris sedia ada
-      const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A${targetRow}:D${targetRow}?valueInputOption=USER_ENTERED`, {
+      const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A${targetRow}:E${targetRow}?valueInputOption=USER_ENTERED`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          range: `TUGASAN UMUM!A${targetRow}:D${targetRow}`,
+          range: `TUGASAN UMUM!A${targetRow}:E${targetRow}`,
           majorDimension: 'ROWS',
           values: [rowValues]
         })
@@ -1245,7 +1249,7 @@ export async function saveTugasanUmumRowToSheet(
       return updateRes.ok;
     } else {
       // Tambah baris baru
-      const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:D:append?valueInputOption=USER_ENTERED`, {
+      const appendRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:E:append?valueInputOption=USER_ENTERED`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1265,14 +1269,14 @@ export async function saveTugasanUmumRowToSheet(
 
 /**
  * Membaca senarai tugasan umum daripada tab "TUGASAN UMUM"
- * Pulangan: [{ kod, qid, kelas, link, rowNumber }]
+ * Pulangan: [{ kod, qid, kelas, link, namaGuru, rowNumber }]
  */
 export async function getTugasanUmumRowsFromSheet(
   token: string,
   spreadsheetId: string
-): Promise<{ kod: string; qid: string; kelas: string; link: string; rowNumber: number }[]> {
+): Promise<{ kod: string; qid: string; kelas: string; link: string; namaGuru: string; rowNumber: number }[]> {
   try {
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:D`, {
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:E`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) return [];
@@ -1285,7 +1289,8 @@ export async function getTugasanUmumRowsFromSheet(
       kod: (row[0] || '').toString().trim().toUpperCase(),
       qid: (row[1] || '').toString().trim().toUpperCase(),
       kelas: (row[2] || '').toString().trim().toUpperCase(),
-      link: (row[3] || '').toString().trim()
+      link: (row[3] || '').toString().trim(),
+      namaGuru: (row[4] || '').toString().trim()
     })).filter((item: any) => item.kod || item.qid);
   } catch (err) {
     console.error('Error fetching rows from TUGASAN UMUM sheet:', err);

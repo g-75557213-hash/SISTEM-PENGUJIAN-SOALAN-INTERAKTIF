@@ -64,20 +64,34 @@ export default function SemakanGuru({
         if (stored) {
           const localList: any[] = JSON.parse(stored);
           localList.forEach(item => {
-            if (item.kod) assignmentsMap.set(item.kod.toUpperCase(), item);
+            if (item.kod) {
+              const matchEmail = user?.email && item.guruEmail ? item.guruEmail === user.email : true;
+              const matchNama = user?.displayName && item.guruNama ? item.guruNama.toUpperCase().includes(user.displayName.toUpperCase()) : true;
+              if (matchEmail || matchNama) {
+                assignmentsMap.set(item.kod.toUpperCase(), item);
+              }
+            }
           });
         }
       } catch (e) {}
 
       // B. Server API
-      const urlAssignments = user?.email ? `/api/tugasan-umum?guruEmail=${encodeURIComponent(user.email)}` : '/api/tugasan-umum';
+      const urlAssignments = user?.email 
+        ? `/api/tugasan-umum?guruEmail=${encodeURIComponent(user.email)}&guruNama=${encodeURIComponent(user.displayName || '')}` 
+        : '/api/tugasan-umum';
       try {
         const resAssignments = await fetch(urlAssignments);
         if (resAssignments.ok) {
           const dataA = await resAssignments.json();
           if (Array.isArray(dataA)) {
             dataA.forEach(item => {
-              if (item.kod) assignmentsMap.set(item.kod.toUpperCase(), item);
+              if (item.kod) {
+                const matchEmail = user?.email && item.guruEmail ? item.guruEmail === user.email : true;
+                const matchNama = user?.displayName && item.guruNama ? item.guruNama.toUpperCase().includes(user.displayName.toUpperCase()) : true;
+                if (matchEmail || matchNama) {
+                  assignmentsMap.set(item.kod.toUpperCase(), item);
+                }
+              }
             });
           }
         }
@@ -86,28 +100,36 @@ export default function SemakanGuru({
       }
 
       // C. Google Sheets "TUGASAN UMUM" tab:
-      // Struktur 4 lajur: [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum]
+      // Struktur 5 lajur: [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum, Nama Guru]
       if (token && spreadsheetId) {
         try {
           const sheetAssignments = await getTugasanUmumRowsFromSheet(token, spreadsheetId);
           if (Array.isArray(sheetAssignments) && sheetAssignments.length > 0) {
             sheetAssignments.forEach(sa => {
-              const matchedQ = questions.find(q => q.idSoalan === sa.qid);
-              const cleanKod = (sa.kod || '').toUpperCase();
-              if (cleanKod) {
-                const existing = assignmentsMap.get(cleanKod);
-                assignmentsMap.set(cleanKod, {
-                  ...existing,
-                  kod: cleanKod,
-                  qid: sa.qid,
-                  kelas: sa.kelas,
-                  linkSoalan: sa.link,
-                  soalanTajuk: existing?.soalanTajuk || matchedQ?.bab || sa.qid,
-                  tingkatan: existing?.tingkatan || matchedQ?.tingkatan || '',
-                  subjek: existing?.subjek || matchedQ?.subjek || '',
-                  bab: existing?.bab || matchedQ?.bab || sa.qid,
-                  createdAt: existing?.createdAt || 'Google Sheets'
-                });
+              const cleanNamaInSheet = (sa.namaGuru || '').trim();
+              const teacherNameMatch = user?.displayName && cleanNamaInSheet ? cleanNamaInSheet.toUpperCase().includes(user.displayName.toUpperCase()) || user.displayName.toUpperCase().includes(cleanNamaInSheet.toUpperCase()) : true;
+              const teacherEmailMatch = user?.email && cleanNamaInSheet ? cleanNamaInSheet.toLowerCase().includes(user.email.toLowerCase()) : false;
+
+              // HANYA paparkan tugasan yang dijana oleh akaun guru tersebut sahaja
+              if (!cleanNamaInSheet || teacherNameMatch || teacherEmailMatch) {
+                const matchedQ = questions.find(q => q.idSoalan === sa.qid);
+                const cleanKod = (sa.kod || '').toUpperCase();
+                if (cleanKod) {
+                  const existing = assignmentsMap.get(cleanKod);
+                  assignmentsMap.set(cleanKod, {
+                    ...existing,
+                    kod: cleanKod,
+                    qid: sa.qid,
+                    kelas: sa.kelas,
+                    linkSoalan: sa.link,
+                    namaGuru: cleanNamaInSheet || existing?.guruNama || user?.displayName || '',
+                    soalanTajuk: existing?.soalanTajuk || matchedQ?.bab || sa.qid,
+                    tingkatan: existing?.tingkatan || matchedQ?.tingkatan || '',
+                    subjek: existing?.subjek || matchedQ?.subjek || '',
+                    bab: existing?.bab || matchedQ?.bab || sa.qid,
+                    createdAt: existing?.createdAt || 'Google Sheets'
+                  });
+                }
               }
             });
           }

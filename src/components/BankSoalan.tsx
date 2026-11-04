@@ -191,14 +191,15 @@ export default function BankSoalan({
       console.warn("Gagal simpan ke localStorage:", e);
     }
 
-    // 3. Save 4 columns to tab TUGASAN UMUM in teacher's Google Spreadsheet:
-    // [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum]
+    // 3. Save 5 columns to tab TUGASAN UMUM in teacher's Google Spreadsheet:
+    // [Kod Tugasan, ID Soalan, Kelas, Link tugasan umum, Nama Guru]
     if (token && spreadsheetId) {
       saveTugasanUmumRowToSheet(token, spreadsheetId, {
         kod: finalKod,
         qid: publicModalQ.idSoalan,
         kelas: finalKelas,
-        link: generatedUrl
+        link: generatedUrl,
+        namaGuru: user?.displayName || user?.email || ''
       }).catch(errSheet => {
         console.warn("Gagal merekod ke tab TUGASAN UMUM Google Sheets:", errSheet);
       });

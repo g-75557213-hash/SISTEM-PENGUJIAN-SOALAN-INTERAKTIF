@@ -356,13 +356,14 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
   app.get("/api/tugasan-umum", async (req, res) => {
     try {
-      const { guruEmail, qid } = req.query;
+      const { guruEmail, guruNama, qid } = req.query;
       const resultsMap = new Map<string, any>();
 
       // Seed with in-memory store
       inMemoryTugasanUmum.forEach((val, key) => {
         let match = true;
-        if (guruEmail && val.guruEmail !== guruEmail) match = false;
+        if (guruEmail && val.guruEmail && val.guruEmail !== guruEmail) match = false;
+        if (guruNama && val.guruNama && !val.guruNama.toLowerCase().includes(String(guruNama).toLowerCase())) match = false;
         if (qid && val.qid !== qid) match = false;
         if (match) resultsMap.set(key, val);
       });
@@ -381,6 +382,9 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         snapshot.forEach((doc: any) => {
           const data = doc.data();
           if (!data) return;
+          if (guruNama && data.guruNama && !data.guruNama.toLowerCase().includes(String(guruNama).toLowerCase())) {
+            return;
+          }
           let createdAtStr = "";
           if (data.createdAt) {
             try {
