@@ -60,10 +60,13 @@ export default function StudentView({
   // Load saved identity from localStorage
   useEffect(() => {
     if (isPublicMode) {
-      const savedNama = localStorage.getItem(`umum_student_nama`);
-      const savedKelas = localStorage.getItem(`umum_student_kelas`);
-      if (savedNama) setPublicNama(savedNama);
-      if (savedKelas && !currentKelasParam) setPublicKelas(savedKelas);
+      // Mod Umum: SENTIASA kosongkan nama supaya murid wajib menaip NAMA PENUH mereka
+      setPublicNama('');
+      if (currentKelasParam) {
+        setPublicKelas(currentKelasParam);
+      } else {
+        setPublicKelas('');
+      }
     } else if (user) {
       const savedEmail = localStorage.getItem(`delima_email_${user.uid}`);
       const savedName = localStorage.getItem(`delima_name_${user.uid}`);

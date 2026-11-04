@@ -554,6 +554,9 @@ function doGet(e) {
         userEmail = ""; 
         userName = "";
       }
+    } else {
+      userEmail = "";
+      userName = "";
     }
     userEmail = userEmail || "";
     userName = userName || "";
