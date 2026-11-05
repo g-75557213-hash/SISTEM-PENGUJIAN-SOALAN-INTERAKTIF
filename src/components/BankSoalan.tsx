@@ -61,6 +61,7 @@ export default function BankSoalan({
   const [isLoadingPublic, setIsLoadingPublic] = useState(false);
   const [copiedPublicLink, setCopiedPublicLink] = useState(false);
   const [copiedPublicWa, setCopiedPublicWa] = useState(false);
+  const [deletingPublicKod, setDeletingPublicKod] = useState<string | null>(null);
 
   const handleOpenPublicModal = async (q: SoalanData) => {
     setPublicModalQ(q);
@@ -1218,28 +1219,62 @@ export default function BankSoalan({
                             </button>
                             <button
                               type="button"
+                              disabled={deletingPublicKod === item.kod}
                               onClick={async () => {
-                                if (confirm(`Padam rekod pautan bagi kelas ${item.kelas} (${item.kod})?`)) {
+                                const kodToDelete = (item.kod || '').trim().toUpperCase();
+                                if (!kodToDelete) return;
+
+                                if (!confirm(`Padam rekod pautan bagi kelas ${item.kelas} (${kodToDelete})?\n\nTindakan ini akan memadamkan tugasan dari sistem, tab "TUGASAN UMUM" dan markah murid berkaitan dari Google Sheets.`)) {
+                                  return;
+                                }
+
+                                setDeletingPublicKod(kodToDelete);
+                                try {
+                                  // 1. Padam dari localStorage
                                   try {
                                     const stored = localStorage.getItem('sistem_tugasan_umum_list');
                                     if (stored) {
-                                      const filtered = JSON.parse(stored).filter((x: any) => x.kod !== item.kod);
+                                      const filtered = JSON.parse(stored).filter((x: any) => (x.kod || '').toString().trim().toUpperCase() !== kodToDelete);
                                       localStorage.setItem('sistem_tugasan_umum_list', JSON.stringify(filtered));
                                     }
                                   } catch (e) {}
-                                  setPublicExistingList(prev => prev.filter(x => x.kod !== item.kod));
+
+                                  // 2. Kemaskini senarai paparan
+                                  setPublicExistingList(prev => prev.filter(x => (x.kod || '').toString().trim().toUpperCase() !== kodToDelete));
+
+                                  // 3. Padam dari pelayan
                                   try {
-                                    await fetch(`/api/tugasan-umum/${encodeURIComponent(item.kod)}`, { method: 'DELETE' });
+                                    await fetch(`/api/tugasan-umum/${encodeURIComponent(kodToDelete)}`, { method: 'DELETE' });
                                   } catch (e) {}
-                                  if (token && spreadsheetId) {
-                                    deleteTugasanUmumRowFromSheet(token, spreadsheetId, item.kod).catch(() => {});
+
+                                  // 4. Padam dari Google Sheets (Wajib await!)
+                                  const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+                                  const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+                                  let sheetStatus = '';
+                                  if (activeToken && activeSheetId) {
+                                    const delRes = await deleteTugasanUmumRowFromSheet(activeToken, activeSheetId, kodToDelete);
+                                    if (delRes.success) {
+                                      sheetStatus = `\n(Google Sheets: ${delRes.deletedUmumCount} baris tugasan dipadam)`;
+                                    }
                                   }
+
+                                  alert(`Rekod tugasan ${kodToDelete} berjaya dipadam dari sistem dan Google Sheets.${sheetStatus}`);
+                                } catch (err) {
+                                  console.error("Ralat padam pautan:", err);
+                                  alert("Gagal memadam pautan.");
+                                } finally {
+                                  setDeletingPublicKod(null);
                                 }
                               }}
-                              className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
-                              title="Padam rekod pautan"
+                              className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition disabled:opacity-40"
+                              title="Padam rekod pautan dari sistem & Google Sheets"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {deletingPublicKod === item.kod ? (
+                                <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
                             </button>
                           </div>
                         </div>

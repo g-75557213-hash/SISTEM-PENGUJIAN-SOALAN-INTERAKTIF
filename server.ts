@@ -420,10 +420,60 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
       } catch (dbErr) {
         console.warn("Firestore delete notice:", dbErr);
       }
-      res.json({ success: true, message: "Tugasan umum berjaya dipadam" });
+
+      // Also clean up any associated student submissions for this kod
+      for (const [key, val] of inMemorySubmissions.entries()) {
+        const valKod = (val.kod || '').toUpperCase().trim();
+        if (valKod === cleanKod) {
+          inMemorySubmissions.delete(key);
+        }
+      }
+
+      try {
+        const subSnap = await db.collection("submissions").where("kod", "==", cleanKod).get();
+        if (subSnap.docs && subSnap.docs.length > 0) {
+          await Promise.all(subSnap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+        }
+      } catch (dbErr) {
+        console.warn("Firestore delete submissions notice:", dbErr);
+      }
+
+      res.json({ success: true, message: "Tugasan umum dan markah murid berkaitan berjaya dipadam" });
     } catch (error) {
       console.error("Error deleting tugasan umum:", error);
       res.json({ success: true, message: "Tugasan umum dipadam secara tempatan" });
+    }
+  });
+
+  app.delete("/api/tugasan-umum-submissions", async (req, res) => {
+    try {
+      const { kod, nama } = req.query;
+      if (!kod || !nama) return res.status(400).json({ error: "Missing kod or nama" });
+      const cleanKod = String(kod).toUpperCase().trim();
+      const cleanNama = String(nama).toUpperCase().trim();
+
+      for (const [key, val] of inMemorySubmissions.entries()) {
+        if ((val.kod || '').toUpperCase().trim() === cleanKod && (val.nama || '').toUpperCase().trim() === cleanNama) {
+          inMemorySubmissions.delete(key);
+        }
+      }
+
+      try {
+        const subSnap = await db.collection("submissions")
+          .where("kod", "==", cleanKod)
+          .where("nama", "==", cleanNama)
+          .get();
+        if (subSnap.docs && subSnap.docs.length > 0) {
+          await Promise.all(subSnap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+        }
+      } catch (dbErr) {
+        console.warn("Firestore delete single submission notice:", dbErr);
+      }
+
+      res.json({ success: true, message: "Rekod markah murid berjaya dipadam" });
+    } catch (err) {
+      console.error("Error deleting submission:", err);
+      res.status(500).json({ error: "Failed to delete submission" });
     }
   });
 

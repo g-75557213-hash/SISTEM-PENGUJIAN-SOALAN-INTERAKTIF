@@ -1299,67 +1299,303 @@ export async function getTugasanUmumRowsFromSheet(
 }
 
 /**
- * Memadam baris tugasan umum daripada tab "TUGASAN UMUM" mengikut kod
+ * Memadam baris tugasan umum daripada tab "TUGASAN UMUM" dan rekod markah murid
+ * yang berkaitan dalam tab "Markah Murid" mengikut Kod Tugasan (cth: TU-XXXXX).
  */
 export async function deleteTugasanUmumRowFromSheet(
-  token: string,
-  spreadsheetId: string,
+  token: string | null | undefined,
+  spreadsheetId: string | null | undefined,
   kod: string
-): Promise<boolean> {
+): Promise<{ success: boolean; deletedUmumCount: number; deletedMarkahCount: number; message?: string }> {
   try {
     const cleanKod = (kod || '').trim().toUpperCase();
-    if (!cleanKod) return false;
-
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN%20UMUM!A:A`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    const rows = data.values || [];
-    let rowIndex = -1;
-    for (let i = 1; i < rows.length; i++) {
-      if ((rows[i][0] || '').toString().trim().toUpperCase() === cleanKod) {
-        rowIndex = i;
-        break;
-      }
+    if (!cleanKod) {
+      return { success: false, deletedUmumCount: 0, deletedMarkahCount: 0, message: "Kod tugasan tidak sah." };
     }
 
-    if (rowIndex === -1) return false;
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+    const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
 
-    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties(title,sheetId)`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!metaRes.ok) return false;
+    if (!activeToken || !activeSheetId) {
+      console.warn("deleteTugasanUmumRowFromSheet: Tiada token aktif atau spreadsheetId.");
+      return { success: false, deletedUmumCount: 0, deletedMarkahCount: 0, message: "Tiada token Google atau ID Spreadsheet." };
+    }
+
+    // 1. Dapatkan Metadata Spreadsheet untuk mencari sheetId bagi tab TUGASAN UMUM dan Markah Murid
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}?fields=sheets.properties(title,sheetId)`,
+      { headers: { Authorization: `Bearer ${activeToken}` } }
+    );
+    if (!metaRes.ok) {
+      const errText = await metaRes.text();
+      console.error("Gagal membaca metadata spreadsheet untuk pemadaman:", errText);
+      return { success: false, deletedUmumCount: 0, deletedMarkahCount: 0, message: errText };
+    }
+
     const meta = await metaRes.json();
-    const sheetId = meta.sheets?.find((s: any) => (s.properties?.title || '').trim().toUpperCase() === 'TUGASAN UMUM')?.properties?.sheetId;
+    const sheetsList = meta.sheets || [];
 
-    if (sheetId === undefined) return false;
+    const umumSheet = sheetsList.find((s: any) => {
+      const t = (s.properties?.title || '').trim().toUpperCase();
+      return t === 'TUGASAN UMUM' || t === 'TUGASAN_UMUM';
+    });
 
-    const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
+    const markahSheet = sheetsList.find((s: any) => {
+      const t = (s.properties?.title || '').trim().toLowerCase();
+      return t === 'markah murid' || t === 'markah_murid';
+    });
+
+    const tugasanRegularSheet = sheetsList.find((s: any) => {
+      const t = (s.properties?.title || '').trim().toUpperCase();
+      return t === 'TUGASAN';
+    });
+
+    const requests: any[] = [];
+    let deletedUmumCount = 0;
+    let deletedMarkahCount = 0;
+
+    // 2. Semak tab "TUGASAN UMUM" dan kumpul semua baris yang sepadan
+    if (umumSheet && umumSheet.properties?.sheetId !== undefined) {
+      const umumTitle = umumSheet.properties.title;
+      const umumSheetId = umumSheet.properties.sheetId;
+
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}/values/${encodeURIComponent(`'${umumTitle}'!A:E`)}`,
+        { headers: { Authorization: `Bearer ${activeToken}` } }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const rows = data.values || [];
+        const umumIndices: number[] = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const rowKod = (rows[i][0] || '').toString().trim().toUpperCase();
+          if (rowKod === cleanKod) {
+            umumIndices.push(i);
+          }
+        }
+
+        // Susun secara menurun supaya indeks baris tidak berubah semasa pemadaman
+        umumIndices.sort((a, b) => b - a).forEach(rowIndex => {
+          requests.push({
             deleteDimension: {
               range: {
-                sheetId,
+                sheetId: umumSheetId,
                 dimension: 'ROWS',
                 startIndex: rowIndex,
                 endIndex: rowIndex + 1
               }
             }
+          });
+          deletedUmumCount++;
+        });
+      }
+    }
+
+    // 3. Semak tab "Markah Murid" dan padam rekod markah murid bagi kod tugasan ini
+    if (markahSheet && markahSheet.properties?.sheetId !== undefined) {
+      const markahTitle = markahSheet.properties.title;
+      const markahSheetId = markahSheet.properties.sheetId;
+
+      const mmRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}/values/${encodeURIComponent(`'${markahTitle}'!A:J`)}`,
+        { headers: { Authorization: `Bearer ${activeToken}` } }
+      );
+
+      if (mmRes.ok) {
+        const mmData = await mmRes.json();
+        const mmRows = mmData.values || [];
+        const markahIndices: number[] = [];
+
+        for (let i = 1; i < mmRows.length; i++) {
+          const row = mmRows[i];
+          const rowKodUnik = (row[9] || '').toString().trim().toUpperCase();
+          const rowTugasan = (row[5] || '').toString().trim().toUpperCase();
+
+          if (rowKodUnik === cleanKod || rowKodUnik.includes(cleanKod) || rowTugasan.includes(cleanKod)) {
+            markahIndices.push(i);
           }
-        ]
-      })
-    });
+        }
+
+        markahIndices.sort((a, b) => b - a).forEach(rowIndex => {
+          requests.push({
+            deleteDimension: {
+              range: {
+                sheetId: markahSheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex,
+                endIndex: rowIndex + 1
+              }
+            }
+          });
+          deletedMarkahCount++;
+        });
+      }
+    }
+
+    // 4. Semak tab "TUGASAN" (jika kod unik tercatat di sana)
+    if (tugasanRegularSheet && tugasanRegularSheet.properties?.sheetId !== undefined) {
+      const tugTitle = tugasanRegularSheet.properties.title;
+      const tugSheetId = tugasanRegularSheet.properties.sheetId;
+
+      const tRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}/values/${encodeURIComponent(`'${tugTitle}'!A:D`)}`,
+        { headers: { Authorization: `Bearer ${activeToken}` } }
+      );
+
+      if (tRes.ok) {
+        const tData = await tRes.json();
+        const tRows = tData.values || [];
+        const tIndices: number[] = [];
+
+        for (let i = 1; i < tRows.length; i++) {
+          const rowKodUnik = (tRows[i][3] || '').toString().trim().toUpperCase();
+          if (rowKodUnik === cleanKod) {
+            tIndices.push(i);
+          }
+        }
+
+        tIndices.sort((a, b) => b - a).forEach(rowIndex => {
+          requests.push({
+            deleteDimension: {
+              range: {
+                sheetId: tugSheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex,
+                endIndex: rowIndex + 1
+              }
+            }
+          });
+        });
+      }
+    }
+
+    // 5. Jalankan batchUpdate jika ada baris untuk dipadam
+    if (requests.length > 0) {
+      const batchRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}:batchUpdate`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ requests })
+        }
+      );
+
+      if (!batchRes.ok) {
+        const errText = await batchRes.text();
+        console.error('Gagal memadam baris dari Google Sheets batchUpdate:', errText);
+        return { success: false, deletedUmumCount, deletedMarkahCount, message: errText };
+      }
+    }
+
+    return {
+      success: true,
+      deletedUmumCount,
+      deletedMarkahCount,
+      message: `Berjaya memadam ${deletedUmumCount} baris tugasan umum dan ${deletedMarkahCount} rekod markah dari Google Sheets.`
+    };
+  } catch (err: any) {
+    console.error('Error deleting row from TUGASAN UMUM / Markah Murid sheet:', err);
+    return {
+      success: false,
+      deletedUmumCount: 0,
+      deletedMarkahCount: 0,
+      message: err?.message || 'Ralat semasa memadam dari Google Sheets'
+    };
+  }
+}
+
+/**
+ * Memadam baris rekod markah murid tertentu dari tab "Markah Murid"
+ */
+export async function deleteSingleMarkahMuridRowFromSheet(
+  token: string | null | undefined,
+  spreadsheetId: string | null | undefined,
+  target: {
+    nama: string;
+    kod?: string;
+    qid?: string;
+  }
+): Promise<boolean> {
+  try {
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+    const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+    if (!activeToken || !activeSheetId) return false;
+
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}?fields=sheets.properties(title,sheetId)`,
+      { headers: { Authorization: `Bearer ${activeToken}` } }
+    );
+    if (!metaRes.ok) return false;
+    const meta = await metaRes.json();
+    const markahSheet = (meta.sheets || []).find((s: any) => (s.properties?.title || '').trim().toLowerCase() === 'markah murid');
+    if (!markahSheet || markahSheet.properties?.sheetId === undefined) return false;
+
+    const sheetId = markahSheet.properties.sheetId;
+    const title = markahSheet.properties.title;
+
+    const mmRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}/values/${encodeURIComponent(`'${title}'!A:J`)}`,
+      { headers: { Authorization: `Bearer ${activeToken}` } }
+    );
+    if (!mmRes.ok) return false;
+
+    const mmData = await mmRes.json();
+    const rows = mmData.values || [];
+    const targetNama = (target.nama || '').trim().toUpperCase();
+    const targetKod = (target.kod || '').trim().toUpperCase();
+
+    const rowsToDelete: number[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNama = (row[2] || '').toString().trim().toUpperCase();
+      const rowKod = (row[9] || '').toString().trim().toUpperCase();
+      const rowTugasan = (row[5] || '').toString().trim().toUpperCase();
+
+      let match = (rowNama === targetNama);
+      if (targetKod) {
+        match = match && (rowKod === targetKod || rowKod.includes(targetKod) || rowTugasan.includes(targetKod));
+      }
+      if (match) {
+        rowsToDelete.push(i);
+        break; // Padam satu rekod ini
+      }
+    }
+
+    if (rowsToDelete.length === 0) return true;
+
+    const requests = rowsToDelete.map(idx => ({
+      deleteDimension: {
+        range: {
+          sheetId,
+          dimension: 'ROWS',
+          startIndex: idx,
+          endIndex: idx + 1
+        }
+      }
+    }));
+
+    const batchRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests })
+      }
+    );
 
     return batchRes.ok;
   } catch (err) {
-    console.error('Error deleting row from TUGASAN UMUM sheet:', err);
+    console.error('Error deleting single markah row from sheet:', err);
     return false;
   }
 }

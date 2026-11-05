@@ -50,6 +50,8 @@ export default function SemakanGuru({
   const [filterUmumKelas, setFilterUmumKelas] = useState<string>('all');
   const [searchUmumStudent, setSearchUmumStudent] = useState<string>('');
   const [copiedUmumMarks, setCopiedUmumMarks] = useState(false);
+  const [deletingUmumKod, setDeletingUmumKod] = useState<string | null>(null);
+  const [deletingScoreKey, setDeletingScoreKey] = useState<string | null>(null);
 
   const loadTugasanUmumData = async () => {
     try {
@@ -303,32 +305,109 @@ export default function SemakanGuru({
 
   const handleDeleteUmumAssignment = async (kod: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Adakah anda pasti mahu memadam tugasan umum dengan kod ${kod}?`)) {
+    const cleanKod = (kod || '').trim().toUpperCase();
+    if (!cleanKod) return;
+
+    if (!confirm(`Adakah anda pasti mahu memadam tugasan umum dengan kod ${cleanKod}?\n\nTindakan ini akan memadam rekod tugasan dari sistem, membuang baris tugasan dari tab "TUGASAN UMUM" dan memadam rekod markah murid berkaitan dari tab "Markah Murid" di Google Sheets.`)) {
       return;
     }
+
+    setDeletingUmumKod(cleanKod);
     try {
+      // 1. Padam daripada simpanan tempatan (localStorage)
       try {
         const stored = localStorage.getItem('sistem_tugasan_umum_list');
         if (stored) {
           const list: any[] = JSON.parse(stored);
-          const filtered = list.filter((i: any) => i.kod !== kod);
+          const filtered = list.filter((i: any) => (i.kod || '').toString().trim().toUpperCase() !== cleanKod);
           localStorage.setItem('sistem_tugasan_umum_list', JSON.stringify(filtered));
         }
       } catch (err) {}
-      
-      const res = await fetch(`/api/tugasan-umum/${encodeURIComponent(kod)}`, { method: 'DELETE' });
-      if (token && spreadsheetId) {
-        deleteTugasanUmumRowFromSheet(token, spreadsheetId, kod).catch(() => {});
+
+      // 2. Kemaskini state React secara serta-merta
+      setTugasanUmumList(prev => prev.filter(i => (i.kod || '').toString().trim().toUpperCase() !== cleanKod));
+      setTugasanUmumSubs(prev => prev.filter(s => (s.kod || '').toString().trim().toUpperCase() !== cleanKod));
+
+      // 3. Panggil API pelayan untuk padam tugasan umum & rekod markah berkaitan
+      try {
+        await fetch(`/api/tugasan-umum/${encodeURIComponent(cleanKod)}`, { method: 'DELETE' });
+      } catch (errServer) {
+        console.warn("Ralat padam tugasan dari pelayan:", errServer);
       }
-      alert("Tugasan umum berjaya dipadam.");
-      loadTugasanUmumData();
-    } catch (e) {
+
+      // 4. PADAM DARI GOOGLE SPREADSHEET (WAJIB AWAIT SEPENUHNYA!)
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+      const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+      let sheetDetail = "";
+      if (activeToken && activeSheetId) {
+        try {
+          const sheetDelRes = await deleteTugasanUmumRowFromSheet(activeToken, activeSheetId, cleanKod);
+          if (sheetDelRes.success) {
+            sheetDetail = `\n\n📊 Status Google Sheets:\n• Tab TUGASAN UMUM: ${sheetDelRes.deletedUmumCount} baris dipadam\n• Tab Markah Murid: ${sheetDelRes.deletedMarkahCount} rekod markah dipadam`;
+          } else {
+            console.warn("Makluman pemadaman helaian:", sheetDelRes.message);
+          }
+        } catch (errSheet) {
+          console.error("Gagal memadam dari Google Sheets:", errSheet);
+        }
+      }
+
+      alert(`Tugasan umum (${cleanKod}) berjaya dipadam sepenuhnya dari sistem!${sheetDetail}`);
+      await loadTugasanUmumData();
+    } catch (e: any) {
       console.error(e);
-      if (token && spreadsheetId) {
-        deleteTugasanUmumRowFromSheet(token, spreadsheetId, kod).catch(() => {});
+      alert(`Tugasan umum (${cleanKod}) dipadam.`);
+      await loadTugasanUmumData();
+    } finally {
+      setDeletingUmumKod(null);
+    }
+  };
+
+  const handleDeleteSingleUmumScore = async (sub: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cleanNama = (sub.nama || '').trim().toUpperCase();
+    const cleanKod = (sub.kod || '').trim().toUpperCase();
+    const subKey = `${cleanKod}_${cleanNama}`;
+
+    if (!confirm(`Padam rekod markah murid: ${cleanNama} (${cleanKod || sub.kelas || 'Tugasan Umum'})?\n\nTindakan ini akan memadam rekod markah dari sistem dan tab 'Markah Murid' di Google Sheets.`)) {
+      return;
+    }
+
+    setDeletingScoreKey(subKey);
+    try {
+      // 1. Buang dari state React
+      setTugasanUmumSubs(prev => prev.filter(s => !(
+        (s.nama || '').toString().trim().toUpperCase() === cleanNama &&
+        (s.kod || '').toString().trim().toUpperCase() === cleanKod
+      )));
+
+      // 2. Padam dari pelayan
+      try {
+        await fetch(`/api/tugasan-umum-submissions?kod=${encodeURIComponent(cleanKod)}&nama=${encodeURIComponent(cleanNama)}`, {
+          method: 'DELETE'
+        });
+      } catch (err) {}
+
+      // 3. Padam dari Google Sheets tab Markah Murid
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+      const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+      if (activeToken && activeSheetId) {
+        const { deleteSingleMarkahMuridRowFromSheet } = await import('../lib/sheets');
+        await deleteSingleMarkahMuridRowFromSheet(activeToken, activeSheetId, {
+          nama: cleanNama,
+          kod: cleanKod
+        });
       }
-      alert("Tugasan umum dipadam.");
-      loadTugasanUmumData();
+
+      alert(`Rekod markah ${cleanNama} berjaya dipadam dari sistem dan Google Sheets.`);
+      await loadTugasanUmumData();
+    } catch (err) {
+      console.error("Gagal memadam rekod markah:", err);
+      alert("Gagal memadam rekod markah.");
+    } finally {
+      setDeletingScoreKey(null);
     }
   };
 
@@ -1178,6 +1257,7 @@ export default function SemakanGuru({
                       <th className="py-3 px-4 text-center">Markah (%)</th>
                       <th className="py-3 px-4 text-center">Status</th>
                       <th className="py-3 px-4 text-right">Tarikh & Masa</th>
+                      <th className="py-3 px-3 text-center w-12">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1195,6 +1275,8 @@ export default function SemakanGuru({
                         else markColor = "bg-red-100 text-red-800 border-red-300 font-bold";
                         markLabel = `${mark}%`;
                       }
+
+                      const subKey = `${(sub.kod || '').trim().toUpperCase()}_${(sub.nama || '').trim().toUpperCase()}`;
 
                       return (
                         <tr key={sub.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -1234,6 +1316,20 @@ export default function SemakanGuru({
                           </td>
                           <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[11px]">
                             {sub.updatedAt || '-'}
+                          </td>
+                          <td className="py-3.5 px-3 text-center">
+                            <button
+                              onClick={(e) => handleDeleteSingleUmumScore(sub, e)}
+                              disabled={deletingScoreKey === subKey}
+                              className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition disabled:opacity-40"
+                              title="Padam rekod markah murid ini dari sistem & Google Sheets"
+                            >
+                              {deletingScoreKey === subKey ? (
+                                <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
                           </td>
                         </tr>
                       );
@@ -1308,10 +1404,15 @@ export default function SemakanGuru({
                         </a>
                         <button
                           onClick={(e) => handleDeleteUmumAssignment(t.kod, e)}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition"
-                          title="Padam kod tugasan ini"
+                          disabled={deletingUmumKod === t.kod}
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition disabled:opacity-40"
+                          title="Padam kod tugasan ini dari sistem & Google Sheets"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          {deletingUmumKod === t.kod ? (
+                            <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
                         </button>
                       </div>
                     </div>
