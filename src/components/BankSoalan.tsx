@@ -141,16 +141,9 @@ export default function BankSoalan({
     }
   };
 
-  const getPublicQuizUrl = (qid: string, kod: string, kelas: string, linkSoalan?: string) => {
-    let baseUrl = '';
-    if (linkSoalan && linkSoalan.startsWith('https://script.google.com')) {
-      baseUrl = linkSoalan.split('?')[0];
-    } else if (gasWebAppUrl && gasWebAppUrl.startsWith('https://script.google.com')) {
-      baseUrl = gasWebAppUrl.split('?')[0];
-    } else {
-      baseUrl = 'https://script.google.com/macros/s/AKfycbyBL3nng7I0_ADtD7raoMJhrw1Z41KU_dnxBQi9cYRr2WbfD59kLnPvKsazRcz6-H2acg/exec';
-    }
-    return `${baseUrl}?qid=${encodeURIComponent(qid)}&kod=${encodeURIComponent(kod)}&kelas=${encodeURIComponent(kelas)}&mod=umum`;
+  const getPublicQuizUrl = (qid: string, kod: string, kelas: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/?qid=${encodeURIComponent(qid)}&kod=${encodeURIComponent(kod)}&kelas=${encodeURIComponent(kelas)}&mod=umum`;
   };
 
   const handleCreatePublicLink = async (e: React.FormEvent) => {
@@ -164,7 +157,7 @@ export default function BankSoalan({
     const finalKelas = publicKelasInput.trim();
 
     // 1. GENERATE LINK IMMEDIATELY - Never fail or block the teacher!
-    const generatedUrl = getPublicQuizUrl(publicModalQ.idSoalan, finalKod, finalKelas, publicModalQ.linkSoalan);
+    const generatedUrl = getPublicQuizUrl(publicModalQ.idSoalan, finalKod, finalKelas);
     setPublicGeneratedLink(generatedUrl);
 
     // 2. Save into local storage so it persists across refreshes and is accessible anywhere
@@ -1197,7 +1190,7 @@ export default function BankSoalan({
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {publicExistingList.map((item, idx) => {
-                      const itemUrl = getPublicQuizUrl(item.qid, item.kod, item.kelas, publicModalQ?.linkSoalan);
+                      const itemUrl = getPublicQuizUrl(item.qid, item.kod, item.kelas);
                       return (
                         <div key={item.kod || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3 text-xs">
                           <div className="min-w-0 flex-1">

@@ -88,28 +88,45 @@ export default function StudentView({
     }
   }, [user, isPublicMode, currentKelasParam]);
 
-  // Fetch question HTML
+  // Fetch question HTML with instant localStorage caching for ultra-fast loading
   useEffect(() => {
     const fetchQuestion = async () => {
+      if (!qid) return;
+
+      // 1. Instant Cache Load (< 10ms)
+      let hasCache = false;
+      try {
+        const cached = localStorage.getItem(`cached_question_${qid}`);
+        if (cached && cached.length > 50) {
+          setHtml(cached);
+          setLoading(false);
+          hasCache = true;
+        }
+      } catch (e) {}
+
+      // 2. Fetch live data in background or foreground
       try {
         const url = `/api/question?qid=${qid}${spreadsheetId ? `&spreadsheetId=${spreadsheetId}` : ''}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          setHtml(data.html);
-        } else {
+          if (data.html) {
+            setHtml(data.html);
+            try {
+              localStorage.setItem(`cached_question_${qid}`, data.html);
+            } catch (e) {}
+          }
+        } else if (!hasCache) {
           setHtml("Soalan tidak dijumpai.");
         }
       } catch (err) {
         console.error(err);
-        setHtml("Gagal memuat turun soalan.");
+        if (!hasCache) setHtml("Gagal memuat turun soalan.");
       } finally {
         setLoading(false);
       }
     };
-    if (qid) {
-      fetchQuestion();
-    }
+    fetchQuestion();
   }, [qid, spreadsheetId]);
 
   const handleSignIn = async () => {
@@ -145,14 +162,10 @@ export default function StudentView({
   const handleStartPublicQuiz = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNama = publicNama.trim().toUpperCase();
-    const cleanKelas = publicKelas.trim().toUpperCase();
+    const cleanKelas = (publicKelas || currentKelasParam || 'TUGASAN UMUM').trim().toUpperCase();
 
     if (!cleanNama) {
       alert("Sila masukkan NAMA PENUH anda dalam HURUF BESAR.");
-      return;
-    }
-    if (!cleanKelas) {
-      alert("Sila masukkan KELAS anda.");
       return;
     }
 
@@ -161,13 +174,14 @@ export default function StudentView({
       localStorage.setItem(`umum_student_kelas`, cleanKelas);
     } catch (e) {}
 
+    setPublicKelas(cleanKelas);
     setIsPublicStarted(true);
   };
 
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-sm font-bold text-slate-700">Memuatkan Soalan Interaktif...</p>
       </div>
     );
@@ -187,7 +201,7 @@ export default function StudentView({
             
             <div className="flex justify-center mb-2">
               <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-[11px] font-black px-3.5 py-1 rounded-full border border-emerald-300 shadow-xs uppercase tracking-wide">
-                <span>✨</span> MOD UMUM • TIADA LOG MASUK DIPERLUKAN
+                <span>✨</span> MOD UMUM • TIADA LOG MASUK CHROME
               </span>
             </div>
 
@@ -195,7 +209,7 @@ export default function StudentView({
               Pengesahan Murid
             </h2>
             <p className="text-xs text-center text-slate-600 mb-5 leading-relaxed font-medium">
-              Sila masukkan <span className="font-bold text-emerald-800">NAMA PENUH (HURUF BESAR)</span> dan <span className="font-bold text-slate-800">KELAS</span> anda sebelum mula menjawab soalan kuiz.
+              Sila masukkan <span className="font-bold text-emerald-800">NAMA PENUH (HURUF BESAR)</span> anda untuk memulakan soalan kuiz.
             </p>
 
             {currentKod && (
@@ -213,7 +227,7 @@ export default function StudentView({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
-                    NAMA PENUH (HURUF BESAR) <span className="text-red-500">*</span>
+                    NAMA PENUH PELAJAR (HURUF BESAR) <span className="text-red-500">*</span>
                   </label>
                   <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 uppercase">
                     HURUF BESAR
@@ -239,32 +253,8 @@ export default function StudentView({
                   autoFocus
                 />
                 <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium leading-tight">
-                  <span>ℹ️</span> Taip nama penuh rasmi dalam <strong>HURUF BESAR</strong> seperti dalam pendaftaran sekolah.
+                  <span>⚠️</span> Sila taip nama penuh rasmi dalam <strong>HURUF BESAR</strong> seperti dalam rekod sekolah.
                 </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
-                  KELAS <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text"
-                  required
-                  value={publicKelas}
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                  }}
-                  onChange={(e) => setPublicKelas(e.target.value.toUpperCase())}
-                  style={{ 
-                    color: '#000000', 
-                    WebkitTextFillColor: '#000000', 
-                    backgroundColor: '#ffffff', 
-                    caretColor: '#000000',
-                    textTransform: 'uppercase'
-                  }}
-                  className="w-full px-4 py-3 text-sm font-bold border-2 border-slate-300 rounded-xl bg-white !bg-white text-black !text-black focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal shadow-xs transition"
-                  placeholder="CONTOH: 1 ABU BAKAR / 5 CEMERLANG"
-                />
               </div>
 
               <button 
