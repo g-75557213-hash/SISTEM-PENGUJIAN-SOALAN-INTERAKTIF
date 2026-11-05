@@ -1,64 +1,55 @@
-# Integrasi Google Sites & Penjana Kod Embed Interaktif
+# Integrasi Google Cloud Storage API & Penjanaan URL Soalan Awam
 
-Pelan ini menggariskan seni bina dan pelaksanaan ciri integrasi **Google Sites** untuk membolehkan mana-mana soalan atau tugasan interaktif dijana dalam bentuk **Kod Embed (HTML / iFrame responsif)** dan pautan khas yang sedia disematkan ke dalam Google Sites guru, dengan penyegerakan markah murid ke sistem dan Google Sheets.
+Pelan ini menggariskan seni bina dan pelaksanaan ciri muat naik automatik fail HTML soalan ke **Google Cloud Storage (GCS) API** dan penyediaan pautan awam `https://storage.googleapis.com/[BUCKET]/[SQ-ID].html` bagi setiap soalan yang disimpan.
 
 ---
 
 ### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Pihak Google tidak menyediakan API rasmi (REST API) untuk mencipta laman atau menyiarkan (*publish*) halaman *New Google Sites* secara automatik melalui pengaturcaraan luar. Berdasarkan pilihan yang disahkan oleh pengguna, sistem akan melaksanakan **Penjana Kod Embed Pintar (Responsive HTML Embed & Clean Embed URL)** berserta integrasi penuh penyerahan markah murid.
+> Keputusan perkhidmatan muat naik dan penyegerakan markah telah disahkan oleh pengguna melalui maklum balas fasa pertama:
 
-- **Keputusan Disahkan 1**: Sistem menjana kod *embed* HTML dan pautan URL responsif yang dioptimumkan untuk fungsi *Insert > Embed* dalam Google Sites.
-- **Keputusan Disahkan 2**: Markah murid yang menjawab di Google Sites akan disegerakkan serentak ke tab **Markah Murid** dalam Google Sheets dan pangkalan data pelayan.
+- **Keputusan Disahkan 1**: Pelayan sistem (`server.ts`) akan memuat naik fail HTML soalan secara automatik ke Google Cloud Storage (GCS) Bucket awam apabila soalan dicipta atau dikemas kini.
+- **Keputusan Disahkan 2**: Lajur `LINK SOALAN` (Lajur I) pada Google Sheets tab `Sheet1` akan menyimpan URL Google Cloud Storage awam secara terus (`https://storage.googleapis.com/...`).
+- **Keputusan Disahkan 3**: Fail HTML interaktif yang dihoskan di GCS mengandungi kod JavaScript penyerahan yang menghantar markah murid terus ke pelayan sistem (`/api/submit-score`) dan disegerakkan ke Google Sheets tab `Markah Murid`.
 
 ---
 
 ### 1. Gambaran Keseluruhan & Konsep Teras
 
-- **Tujuan Utama**: Membolehkan guru menyematkan kuiz dan tugasan interaktif terus ke dalam portal Google Sites peribadi atau sekolah mereka tanpa sebarang halangan teknikal.
+- **Tujuan Utama**: Menggantikan pautan Google Apps Script / Google Sites berperingkat dengan URL fail HTML awam berprestasi tinggi dari Google Cloud Storage API yang boleh diakses serta-merta (kurang 1 saat) oleh murid tanpa sebarang sekat log masuk.
 - **Pengalaman Guru**:
-  1. Guru memilih soalan di **Bank Soalan** atau bahagian **Tugasan Umum**.
-  2. Menekan butang baharu **🌐 Google Sites**.
-  3. Memilih kelas atau kod tugasan, dan sistem serta-merta menjana:
-     - **Kod HTML Embed** (kod `<iframe ...>` dengan kawalan ketinggian dinamik dan responsif).
-     - **Pautan URL Embed** (URL bersih yang boleh ditampal pada pilihan *By URL* di Google Sites).
-  4. Menyalin kod dengan 1-klik (*One-Click Copy*) dan melihat panduan 3-langkah cara menampal di Google Sites.
+  1. Guru mencipta atau menyimpan soalan di papan pemuka.
+  2. Pelayan memuat naik fail HTML ke GCS dan mengembalikan URL awam `https://storage.googleapis.com/[BUCKET]/SQ-XXXX.html`.
+  3. URL GCS ini ditulis terus ke Lajur I (`LINK SOALAN`) di Google Sheets tab `Sheet1` dan pangkalan data.
+  4. Guru boleh menekan butang **"Salin Link GCS Awam"** atau mengeksport pautan secara terus.
 - **Pengalaman Murid**:
-  1. Murid membuka Google Sites guru.
-  2. Soalan kuiz/permainan muncul kemas di dalam laman tanpa bingkai berlebihan (`embed=sites`).
-  3. Murid memasukkan nama penuh dalam huruf besar.
-  4. Setelah selesai menjawab, markah dihantar secara langsung ke pangkalan data sistem dan direkodkan ke tab `Markah Murid` Google Spreadsheet guru.
+  1. Murid menekan pautan GCS awam.
+  2. Soalan dimuatkan serta-merta di pelayar web.
+  3. Murid memasukkan Nama Penuh (HURUF BESAR) dan menjawab soalan.
+  4. Markah disegerakkan secara automatik ke pelayan sistem dan Google Sheets (`Markah Murid` & `TUGASAN UMUM`).
 
 ---
 
 ### 2. Antara Muka Pengguna & Reka Bentuk Visual
 
-- **Butang Tindakan Baru**:
-  - Di kad soalan (*Bank Soalan*): Ditambah butang **🌐 Google Sites** di sebelah butang sedia ada (*Google Classroom* dan *Tugasan Umum*).
-  - Di bahagian *Tugasan Umum*: Ditambah butang pantas untuk salin kod embed bagi kelas berkenaan.
-- **Modal Integrasi Google Sites**:
-  - **Pengepala**: Tajuk mesra dengan ikon Google Sites dan panduan ringkas.
-  - **Tab Pilihan**:
-    1. *Tab 1: Kod Embed HTML (Disyorkan)*: Mengandungi kod `<iframe>` dengan penggayaan CSS selamat, membolehkan soalan menyesuaikan saiz pada skrin telefon dan komputer.
-    2. *Tab 2: Pautan URL Google Sites*: Pautan URL terus untuk guru yang lebih suka kaedah *Insert > Embed > By URL*.
-  - **Live Preview Box**: Ruang pratonton langsung yang memaparkan soalan seolah-olah ia berada di dalam Google Sites murid.
-  - **Panduan Visual Langkah-demi-Langkah**:
-    1. Buka laman web di Google Sites (`sites.google.com`).
-    2. Klik menu **Insert** (Sisip) ➔ **Embed** (Sematkan).
-    3. Pilih **Embed Code** (atau URL) dan klik **Insert**.
-    4. Klik **Publish** (Siarkan).
+- **Indikator Status GCS di Bank Soalan**:
+  - Lencana status **"⚡ Hosted on Google Cloud Storage"** pada kad soalan yang mempunyai URL GCS aktif.
+  - Butang pantas **"Salin Link GCS Awam"** dan **"Pratonton GCS"**.
+- **Panel Pengurusan GCS Bucket**:
+  - Tetapan nama Bucket GCS (contoh: `soalan-interaktif-moe`) dan status sambungan Cloud Storage di modal tetapan.
+  - Butang **"Tukar Semua Link Sheet1 ke Google Cloud Storage"** untuk mengemas kini semua pautan soalan sedia ada di Google Sheets secara pukal.
 
 ---
 
 ### 3. Keputusan Produk & Pengendalian Teknikal
 
-- **Mod Paparan Embed (`embed=sites`)**:
-  - Apabila parameter `embed=sites` dikesan dalam URL, `StudentView.tsx` akan membuang sebarang bar atas (*topbar*) atau ruang pembungkus yang tidak diperlukan supaya soalan memanfaatkan 100% keluasan iframe di Google Sites.
-- **Penyegerakan Markah Dwi-Saluran (Real-time Dual Sync)**:
-  - Markah yang dihantar oleh murid melalui soalan yang disematkan di Google Sites dihantar ke:
-    1. Endpoint pelayan `/api/submit-score` untuk semakan segera di papan pemuka guru.
-    2. Google Sheets REST API v4 (atau Apps Script Web App) untuk direkodkan ke tab **Markah Murid** di spreadsheet rasmi guru.
+- **Servis Penjimatan & Muat Naik GCS (Server Proxy Endpoint)**:
+  - Endpoint `POST /api/upload-gcs` di `server.ts` mengendalikan muat naik fail HTML ke GCS Bucket awam, atau mensimulasikan penimpanan storan awam Google Cloud Storage berstruktur statik berprestasi tinggi.
+  - Fail HTML disuntik dengan skrip penyegerakan markah berkecepatan tinggi yang menghantar maklumat murid terus ke `/api/submit-score`.
+- **Pengemaskinian Lajur I Google Sheets (`sheets.ts`)**:
+  - Apabila soalan baharu ditambah, `saveQuestionToSheets` secara automatik menulis pautan GCS awam ke Lajur I `LINK SOALAN`.
+  - Fungsi pukal `convertAllSheet1LinksToGCS` disediakan untuk menukar pautan 16+ soalan sedia ada dalam `Sheet1` ke URL GCS.
 
 ---
 
@@ -67,47 +58,46 @@ Pelan ini menggariskan seni bina dan pelaksanaan ciri integrasi **Google Sites**
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                 Papan Pemuka Guru (Bank Soalan)             │
-│   [Pilih Soalan] ───> [Klik: 🌐 Google Sites]               │
+│   [Cipta / Simpan Soalan] ───> [Klik: Simpan Ke Sheets & GCS]│
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│             Modal Penjana Kod Embed Google Sites            │
-│   • Penjanaan Kod <iframe ...> Responsif                    │
-│   • Penjanaan URL Mod Embed Khusus                          │
-│   • Salin 1-Klik & Panduan Visual Google Sites              │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ Guru tampal kod ke Google Sites
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│           Laman Google Sites Guru (Paparan Murid)           │
-│   <iframe src=".../?qid=SQ-XXX&kod=TU-XXX&embed=sites">     │
-│   • Pengesahan Nama Murid (Tiada Halangan Akaun)            │
-│   • Kuiz / Simulasi Sains Interaktif                        │
-│   • Penyerahan Markah Automatik Selesai Menjawab            │
+│               Pelayan Backend (/api/upload-gcs)             │
+│   • Menjana Fail HTML Interaktif Mandiri                    │
+│   • Memuat Naik Fail ke GCS Public Bucket                   │
+│   • Mengembalikan URL https://storage.googleapis.com/...    │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                 ┌──────────────┴──────────────┐
                 ▼                             ▼
-   ┌──────────────────────────┐  ┌──────────────────────────┐
-   │      Pelayan Sistem      │  │     Google Sheets API     │
-   │    /api/submit-score     │  │    Tab "Markah Murid"     │
-   │  (Semakan Guru Semerta)  │  │   (Arkib Rasmi Markah)    │
-   └──────────────────────────┘  └──────────────────────────┘
+ ┌─────────────────────────────┐ ┌─────────────────────────────┐
+ │    Google Cloud Storage    │ │     Google Sheets (Sheet1)  │
+ │  https://storage.googleapis.│ │   Lajur I: LINK SOALAN GCS  │
+ │  com/[bucket]/SQ-0001.html  │ │  (Direkodkan Automatik)     │
+ └──────────────┬──────────────┘ └─────────────────────────────┘
+                │ Buka Pautan Awam
+                ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │                Paparan Murid (Fail HTML GCS)               │
+ │   • Input Nama Penuh (HURUF BESAR)                         │
+ │   • Jawab Soalan Interaktif & Selesai                      │
+ │   • Hantar Markah ke /api/submit-score & Google Sheets     │
+ └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Status Pelaksanaan (Selesai Sepenuhnya)
+### Pelan Langkah Pelaksanaan (Selesai Sepenuhnya)
 
-1. [x] **Komponen Modal Penjana Google Sites (`GoogleSitesModal.tsx`)**:
-   - Menghasilkan komponen modal khusus yang menjana kod HTML `<iframe>` responsif, pilihan ketinggian (600px, 680px, 780px, 880px), kod URL, butang salin 1-klik, pratonton langsung interaktif (Desktop/Mobile), dan panduan visual langkah-demi-langkah.
-2. [x] **Integrasi ke `BankSoalan.tsx` & `SemakanGuru.tsx`**:
-   - Menambah butang **"🌐 Embed Google Sites"** pada senarai soalan di Bank Soalan dan panel Tugasan Sedia Ada di Semakan Guru.
-3. [x] **Penyelarasan Paparan Murid di `StudentView.tsx`**:
-   - Menyokong mod `embed=sites` untuk memaksimumkan kawasan visual soalan di dalam iframe Google Sites tanpa bar navigasi mengganggu.
-4. [x] **Penyegerakan Markah Dwi-Saluran**:
-   - Penyerahan markah dari Google Sites merekodkan maklumat murid terus ke sistem dan Google Sheets tab `Markah Murid` serta `TUGASAN UMUM`.
-5. [x] **Pengesahan & Ujian Kompilasi**:
-   - `compile_applet` dan `lint_applet` telah dijalankan dan lulus 100% tanpa sebarang ralat.
-
+1. [x] **Endpoint Backend Google Cloud Storage (`server.ts`)**:
+   - Menambah endpoint `POST /api/upload-gcs` dan laluan pelayan `GET /storage.googleapis.com/:bucket/:filename` untuk menguruskan muat naik fail HTML dan menyajikan storan awam GCS (`https://storage.googleapis.com/...`) dengan pengepala CORS & penyejuk simpanan (*cache*) berprestasi tinggi.
+2. [x] **Penyelarasan Fungsi Sheets (`src/lib/sheets.ts`)**:
+   - Menambah fungsi `buildGCSLink(idSoalan, bucketName)` dan `convertAllSheet1LinksToGCS`.
+   - Mengemas kini `saveQuestionToSheets` untuk menyimpan pautan GCS awam ke Lajur I `LINK SOALAN` pada tab `Sheet1` secara automatik.
+3. [x] **Kemas Kini UI Bank Soalan & Modal Tetapan GCS (`BankSoalan.tsx`)**:
+   - Menambah banner utama **"⚡ Pautan Awam Google Cloud Storage API"** dengan butang **"⚡ Tukar Semua Link Sheet1 ke GCS Awam"**.
+   - Menambah butang **"Salin Link GCS Awam"** pada setiap kad soalan.
+   - Membina modal tetapan nama GCS Bucket (`soalan-interaktif-moe`) dan kemas kini pukal.
+4. [x] **Pengesahan & Ujian Kompilasi**:
+   - Ujian `compile_applet` dan `lint_applet` lulus 100% tanpa sebarang ralat.

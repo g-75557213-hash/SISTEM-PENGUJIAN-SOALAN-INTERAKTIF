@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2, Code2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
-import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet, buildGoogleSiteLink, convertAllSheet1LinksToGoogleSites } from '../lib/sheets';
+import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet, buildGoogleSiteLink, convertAllSheet1LinksToGoogleSites, buildGCSLink, convertAllSheet1LinksToGCS } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
 import { createAssignment, deleteAssignment } from '../lib/classroom';
 import { logout } from '../lib/firebase';
@@ -112,6 +112,43 @@ export default function BankSoalan({
       alert("Ralat semasa menukar pautan di Sheet1: " + (err.message || err));
     } finally {
       setIsConvertingLinks(false);
+    }
+  };
+
+  // Google Cloud Storage API states
+  const [showGcsSettingsModal, setShowGcsSettingsModal] = useState(false);
+  const [isConvertingGcs, setIsConvertingGcs] = useState(false);
+  const [customGcsBucket, setCustomGcsBucket] = useState(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('gcs_bucket_name') : '') || 'soalan-interaktif-moe';
+  });
+
+  const handleConvertSheet1ToGCS = async () => {
+    if (!token) {
+      alert("Sila pastikan akaun Google anda aktif untuk mengemas kini tab Sheet1.");
+      return;
+    }
+    setIsConvertingGcs(true);
+    try {
+      const bucketName = customGcsBucket.trim() || 'soalan-interaktif-moe';
+      localStorage.setItem('gcs_bucket_name', bucketName);
+
+      const res = await convertAllSheet1LinksToGCS(
+        token,
+        spreadsheetId,
+        bucketName
+      );
+
+      if (onRefreshQuestions) {
+        await onRefreshQuestions();
+      }
+
+      alert(`⚡ Berjaya! ${res.message}\nSemua pautan soalan dalam tab Sheet1 kini menggunakan URL Google Cloud Storage Awam (storage.googleapis.com).`);
+      setShowGcsSettingsModal(false);
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat semasa menukar pautan GCS di Sheet1: " + (err.message || err));
+    } finally {
+      setIsConvertingGcs(false);
     }
   };
 
@@ -565,17 +602,17 @@ export default function BankSoalan({
   return (
     <div className="flex flex-col h-full bg-slate-50 relative z-0 pb-10">
       <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col relative">
-        {/* Banner Mod Google Sites & Kemas Kini Sheet1 */}
+        {/* Banner Mod Google Cloud Storage API & Google Sites */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 mb-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-600 text-white flex items-center justify-center font-bold text-lg shadow-sm border border-white/20 shrink-0">
-              🌐
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-500 text-white flex items-center justify-center font-bold text-lg shadow-sm border border-white/20 shrink-0">
+              ⚡
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-black text-slate-800">Pautan Google Sites (Tab Sheet1)</h3>
+                <h3 className="text-sm font-black text-slate-800">Pautan Awam Google Cloud Storage API (Tab Sheet1)</h3>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
-                  Sistem Menggunakan Google Sites Sahaja
+                  Link Awam Sepantas Kilat (&lt;1s)
                 </span>
                 {questions.some(q => q.linkSoalan && q.linkSoalan.includes('script.google.com')) && (
                   <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
@@ -584,19 +621,30 @@ export default function BankSoalan({
                 )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Semua soalan dijanakan menggunakan pautan Google Sites responsif tanpa memerlukan sekatan Google Apps Script.
+                Semua soalan disimpan dalam fail HTML awam Google Cloud Storage (<code>storage.googleapis.com</code>) tanpa sebarang sekat log masuk.
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => setShowSitesSettingsModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition cursor-pointer shrink-0"
-            title="Kemas kini semua pautan soalan dalam Sheet1 kepada link Google Site"
-          >
-            <Globe className="w-4 h-4 text-sky-200" />
-            <span>Tukar Semua Link Sheet1 ke Google Site</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowGcsSettingsModal(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition cursor-pointer shrink-0"
+              title="Kemas kini semua pautan soalan dalam Sheet1 kepada URL Google Cloud Storage Awam"
+            >
+              <Sparkles className="w-4 h-4 text-yellow-200" />
+              <span>⚡ Tukar Semua Link Sheet1 ke GCS Awam</span>
+            </button>
+
+            <button
+              onClick={() => setShowSitesSettingsModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer shrink-0"
+              title="Kemas kini pautan soalan kepada format Google Sites"
+            >
+              <Globe className="w-3.5 h-3.5 text-sky-200" />
+              <span>Google Sites</span>
+            </button>
+          </div>
         </div>
 
         <WaygroundSection token={token} classes={classes} spreadsheetId={spreadsheetId} />
@@ -750,15 +798,27 @@ export default function BankSoalan({
                             <div className="flex gap-2 pt-1">
                               <button 
                                 onClick={() => {
+                                  const gcsLink = buildGCSLink(q.idSoalan, customGcsBucket);
+                                  navigator.clipboard.writeText(gcsLink);
+                                  alert("⚡ Pautan Awam Google Cloud Storage berjaya disalin!\n" + gcsLink);
+                                }}
+                                className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-900 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition border border-amber-200 gap-1"
+                                title="Salin URL Google Cloud Storage Awam (storage.googleapis.com)"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                Salin Link GCS Awam
+                              </button>
+                              <button 
+                                onClick={() => {
                                   const directLink = buildGoogleSiteLink(q.idSoalan, customSitesBaseUrl);
                                   navigator.clipboard.writeText(directLink);
                                   alert("Pautan Google Site soalan berjaya disalin!");
                                 }}
-                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition border border-slate-200 gap-1.5"
+                                className="flex-1 bg-white hover:bg-slate-50 text-slate-700 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition border border-slate-200 gap-1"
                                 title="Salin pautan Google Site murid"
                               >
                                 <Globe className="w-3.5 h-3.5 text-blue-500" />
-                                Salin Link Google Site
+                                Google Site
                               </button>
                             </div>
                           </div>
@@ -1498,6 +1558,108 @@ export default function BankSoalan({
                   <>
                     <Globe className="w-4 h-4" />
                     <span>Kemas Kini Sheet1 Sekarang</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PENUKARAN SEMUA LINK SHEET1 KEPADA GOOGLE CLOUD STORAGE API */}
+      {showGcsSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            
+            {/* Header */}
+            <div className="px-6 py-4.5 bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-xl shadow-inner border border-white/20">
+                  ⚡
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight">Tukar Semua Link Sheet1 ke Google Cloud Storage</h2>
+                  <p className="text-xs text-amber-100 font-medium">Muat naik fail HTML &amp; kemas kini Lajur I (LINK SOALAN) ke URL GCS Awam</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGcsSettingsModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-amber-800 text-sm">
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>Ciri Google Cloud Storage API</span>
+                </div>
+                <p className="leading-relaxed">
+                  Semua fail HTML soalan (<strong>{questions.length}</strong> soalan) akan dihoskan di dalam <strong>Google Cloud Storage Bucket Awam</strong>. Murid boleh terus membuka soalan sepantas kilat (&lt;1s) tanpa sebarang halangan atau keperluan log masuk Google!
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                  <div className="bg-white p-2 rounded-xl border border-amber-200">
+                    <span className="text-slate-500 block text-[10px]">Jumlah Soalan:</span>
+                    <strong className="text-slate-800 text-sm">{questions.length}</strong>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-amber-200">
+                    <span className="text-slate-500 block text-[10px]">Format Link:</span>
+                    <strong className="text-emerald-700 text-[11px] truncate block">storage.googleapis.com/...</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Nama GCS Bucket (Default: soalan-interaktif-moe):
+                </label>
+                <input
+                  type="text"
+                  placeholder="soalan-interaktif-moe"
+                  value={customGcsBucket}
+                  onChange={(e) => setCustomGcsBucket(e.target.value.toLowerCase().replace(/[^a-z0-9\-_]/g, ''))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition font-mono"
+                />
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  💡 Format URL awam: <code>https://storage.googleapis.com/{customGcsBucket || 'soalan-interaktif-moe'}/SQ-XXXX.html</code>
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 flex items-start gap-2">
+                <span className="text-base">⚡</span>
+                <span>
+                  Sistem akan mengemas kini <strong>Lajur I (LINK SOALAN)</strong> dalam tab <strong>Sheet1</strong> Google Sheets anda dengan URL awam Google Cloud Storage bagi kesemua {questions.length} soalan.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowGcsSettingsModal(false)}
+                disabled={isConvertingGcs}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConvertSheet1ToGCS}
+                disabled={isConvertingGcs}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"
+              >
+                {isConvertingGcs ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Mengemas kini Sheet1 &amp; GCS...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>⚡ Kemas Kini Sheet1 ke GCS Sekarang</span>
                   </>
                 )}
               </button>

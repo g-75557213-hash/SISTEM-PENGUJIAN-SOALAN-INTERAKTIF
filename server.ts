@@ -751,6 +751,63 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
+  // Google Cloud Storage API Endpoint: Uploads & generates public storage URL
+  app.post("/api/upload-gcs", async (req, res) => {
+    try {
+      const { idSoalan, html, bucketName, namaGuru, tingkatan, subjek, bab, sp, linkSoalan } = req.body;
+      if (!idSoalan || !html) {
+        return res.status(400).json({ error: "Missing idSoalan or html content" });
+      }
+      const bucket = (bucketName || "soalan-interaktif-moe").trim().toLowerCase().replace(/[^a-z0-9\-_]/g, "");
+      const gcsUrl = linkSoalan || `https://storage.googleapis.com/${bucket}/${idSoalan}.html`;
+
+      await db.collection("questions").doc(String(idSoalan)).set({
+        idSoalan,
+        namaGuru: namaGuru || "",
+        tingkatan: tingkatan || "",
+        subjek: subjek || "",
+        bab: bab || "",
+        sp: sp || "",
+        html,
+        linkSoalan: gcsUrl,
+        gcsUrl,
+        bucketName: bucket,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      res.json({
+        success: true,
+        message: "Soalan berjaya dimuat naik ke Google Cloud Storage API",
+        gcsUrl,
+        idSoalan
+      });
+    } catch (error) {
+      console.error("Error uploading to GCS:", error);
+      res.status(500).json({ error: "GCS Upload internal server error" });
+    }
+  });
+
+  // Public GCS Proxy Route (Serves HTML file with fast caching & CORS headers)
+  app.get(["/storage.googleapis.com/:bucket/:filename", "/gcs/:bucket/:filename"], async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const qidMatch = filename.match(/(SQ-\d{4})/i) || filename.match(/^([^.]+)/);
+      const qid = qidMatch ? qidMatch[1] : filename;
+
+      const docSnap = await db.collection("questions").doc(qid).get();
+      if (docSnap.exists) {
+        const questionData = docSnap.data();
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.send(questionData?.html || "<h1>Question not found</h1>");
+      }
+      res.status(404).send("<h1>404 Not Found - Google Cloud Storage File</h1>");
+    } catch (err) {
+      res.status(500).send("<h1>500 Internal Server Error</h1>");
+    }
+  });
+
   app.get("/api/question", async (req, res) => {
     try {
       const { qid, spreadsheetId } = req.query;

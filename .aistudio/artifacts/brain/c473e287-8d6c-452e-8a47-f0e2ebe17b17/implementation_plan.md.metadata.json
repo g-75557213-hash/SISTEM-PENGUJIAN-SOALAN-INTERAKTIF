@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan komprehensif bagi integrasi Google Sites: Penjanaan kod embed HTML responsif dan pautan khas soalan untuk disematkan ke dalam Google Sites guru, lengkap dengan sokongan penyerahan dan penyegerakan markah murid secara automatik ke pangkalan data sistem dan tab Markah Murid Google Sheets.",
-  "updatedAt": "2026-11-05T04:32:31.816693603Z",
+  "summary": "Pelan pelaksanaan integrasi Google Cloud Storage API & penjanaan pautan soalan awam (https://storage.googleapis.com/...) bagi mengemaskini tab Sheet1 Google Sheets.",
+  "updatedAt": "2026-11-05T06:05:41.200567703Z",
   "requestFeedback": true,
   "userFacing": true
 }
