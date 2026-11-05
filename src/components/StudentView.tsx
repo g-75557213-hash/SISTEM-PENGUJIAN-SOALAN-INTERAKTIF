@@ -27,11 +27,11 @@ export default function StudentView({
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const currentKod = initialKod || urlParams?.get('kod') || '';
   const currentKelasParam = initialKelas || urlParams?.get('kelas') || '';
-  const isSitesMode = urlParams?.get('embed') === 'sites';
+  const isSitesMode = urlParams?.get('embed') === 'sites' || urlParams?.get('mod') === 'sites' || initialMod === 'sites';
   
   // Public Mode (Tugasan Umum & Google Sites) state - Strictly NO Google/Chrome Login required!
   const [isPublicMode, setIsPublicMode] = useState<boolean>(() => {
-    return isSitesMode || initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
+    return isSitesMode || initialMod === 'umum' || urlParams?.get('mod') === 'umum' || initialMod === 'sites' || urlParams?.get('mod') === 'sites' || !!currentKod;
   });
 
   const [publicNama, setPublicNama] = useState('');

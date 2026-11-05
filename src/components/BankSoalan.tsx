@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2, Code2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
-import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet } from '../lib/sheets';
+import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet, buildGoogleSiteLink, convertAllSheet1LinksToGoogleSites } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
 import { createAssignment, deleteAssignment } from '../lib/classroom';
 import { logout } from '../lib/firebase';
@@ -19,6 +19,7 @@ interface BankSoalanProps {
   spreadsheetId: string;
   gasWebAppUrl: string;
   onEditQuestion: (q: SoalanData) => void;
+  onRefreshQuestions?: () => Promise<void> | void;
 }
 
 export default function BankSoalan({ 
@@ -31,7 +32,8 @@ export default function BankSoalan({
   setAssignmentStatus,
   spreadsheetId,
   gasWebAppUrl,
-  onEditQuestion 
+  onEditQuestion,
+  onRefreshQuestions 
 }: BankSoalanProps) {
   const [search, setSearch] = useState('');
   const [selectedSubjek, setSelectedSubjek] = useState('');
@@ -68,9 +70,49 @@ export default function BankSoalan({
   const [showGoogleSitesModal, setShowGoogleSitesModal] = useState(false);
   const [googleSitesQ, setGoogleSitesQ] = useState<SoalanData | null>(null);
 
+  // Google Sites Sheet1 Conversion states
+  const [showSitesSettingsModal, setShowSitesSettingsModal] = useState(false);
+  const [isConvertingLinks, setIsConvertingLinks] = useState(false);
+  const [customSitesBaseUrl, setCustomSitesBaseUrl] = useState(() => {
+    return (typeof window !== 'undefined' ? localStorage.getItem('google_site_base_url') : '') || '';
+  });
+
   const handleOpenGoogleSitesModal = (q: SoalanData) => {
     setGoogleSitesQ(q);
     setShowGoogleSitesModal(true);
+  };
+
+  const handleConvertSheet1ToSites = async () => {
+    if (!token) {
+      alert("Sila pastikan akaun Google anda aktif untuk mengemas kini tab Sheet1.");
+      return;
+    }
+    setIsConvertingLinks(true);
+    try {
+      if (customSitesBaseUrl.trim()) {
+        localStorage.setItem('google_site_base_url', customSitesBaseUrl.trim());
+      } else {
+        localStorage.removeItem('google_site_base_url');
+      }
+
+      const res = await convertAllSheet1LinksToGoogleSites(
+        token,
+        spreadsheetId,
+        customSitesBaseUrl.trim() || undefined
+      );
+
+      if (onRefreshQuestions) {
+        await onRefreshQuestions();
+      }
+
+      alert(`Berjaya! ${res.message}\nSemua soalan dalam Sheet1 kini menggunakan pautan Google Sites.`);
+      setShowSitesSettingsModal(false);
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat semasa menukar pautan di Sheet1: " + (err.message || err));
+    } finally {
+      setIsConvertingLinks(false);
+    }
   };
 
   const handleOpenPublicModal = async (q: SoalanData) => {
@@ -331,17 +373,13 @@ export default function BankSoalan({
           }
         }
         
-        // Fallback if writing failed or link wasn't generated
-        if (!linkToUse) {
-          let qs = `?qid=${sendQ.idSoalan}`;
-          if (spreadsheetId) qs += `&spreadsheetId=${spreadsheetId}`;
-          if (gasWebAppUrl) qs += `&gasWebAppUrl=${encodeURIComponent(gasWebAppUrl)}`;
-          if (uniqueCode) qs += `&kod=${encodeURIComponent(uniqueCode)}`;
-          qs += `&kelas=${encodeURIComponent(className)}&tugasan=${encodeURIComponent(sendForm.title)}`;
-          
-          linkToUse = (sendQ.linkSoalan && sendQ.linkSoalan.startsWith('http')) ? sendQ.linkSoalan : (gasWebAppUrl 
-            ? `${gasWebAppUrl}${gasWebAppUrl.includes('?') ? '&' : '?'}qid=${sendQ.idSoalan}&kelas=${encodeURIComponent(className)}&tugasan=${encodeURIComponent(sendForm.title)}${uniqueCode ? '&kod=' + encodeURIComponent(uniqueCode) : ''}`
-            : `${window.location.origin}/${qs}`);
+        // Fallback if writing failed or link wasn't generated - wajib gunakan format Google Site
+        if (!linkToUse || linkToUse.includes('script.google.com')) {
+          linkToUse = buildGoogleSiteLink(sendQ.idSoalan, customSitesBaseUrl, {
+            kod: uniqueCode,
+            kelas: className,
+            tugasan: sendForm.title
+          });
         }
           
         // 3. Post to Classroom
@@ -527,6 +565,40 @@ export default function BankSoalan({
   return (
     <div className="flex flex-col h-full bg-slate-50 relative z-0 pb-10">
       <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col relative">
+        {/* Banner Mod Google Sites & Kemas Kini Sheet1 */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 mb-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-600 text-white flex items-center justify-center font-bold text-lg shadow-sm border border-white/20 shrink-0">
+              🌐
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-slate-800">Pautan Google Sites (Tab Sheet1)</h3>
+                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
+                  Sistem Menggunakan Google Sites Sahaja
+                </span>
+                {questions.some(q => q.linkSoalan && q.linkSoalan.includes('script.google.com')) && (
+                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                    Perlu Kemas Kini Sheet1
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Semua soalan dijanakan menggunakan pautan Google Sites responsif tanpa memerlukan sekatan Google Apps Script.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowSitesSettingsModal(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition cursor-pointer shrink-0"
+            title="Kemas kini semua pautan soalan dalam Sheet1 kepada link Google Site"
+          >
+            <Globe className="w-4 h-4 text-sky-200" />
+            <span>Tukar Semua Link Sheet1 ke Google Site</span>
+          </button>
+        </div>
+
         <WaygroundSection token={token} classes={classes} spreadsheetId={spreadsheetId} />
         
 
@@ -678,17 +750,15 @@ export default function BankSoalan({
                             <div className="flex gap-2 pt-1">
                               <button 
                                 onClick={() => {
-                                  const directLink = (q.linkSoalan && q.linkSoalan.startsWith('http')) ? q.linkSoalan : (gasWebAppUrl 
-                                    ? `${gasWebAppUrl}${gasWebAppUrl.includes('?') ? '&' : '?'}qid=${q.idSoalan}`
-                                    : `${window.location.origin}/?qid=${q.idSoalan}&spreadsheetId=${spreadsheetId}&gasWebAppUrl=${encodeURIComponent(gasWebAppUrl)}`);
+                                  const directLink = buildGoogleSiteLink(q.idSoalan, customSitesBaseUrl);
                                   navigator.clipboard.writeText(directLink);
-                                  alert("Pautan terus murid berjaya disalin!");
+                                  alert("Pautan Google Site soalan berjaya disalin!");
                                 }}
                                 className="flex-1 bg-white hover:bg-slate-50 text-slate-700 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center transition border border-slate-200 gap-1.5"
-                                title="Salin pautan terus murid untuk dikongsi secara terus tanpa Google Classroom"
+                                title="Salin pautan Google Site murid"
                               >
-                                <Link className="w-3.5 h-3.5 text-slate-500" />
-                                Salin Link
+                                <Globe className="w-3.5 h-3.5 text-blue-500" />
+                                Salin Link Google Site
                               </button>
                             </div>
                           </div>
@@ -798,16 +868,14 @@ export default function BankSoalan({
                             
                             <button 
                               onClick={() => {
-                                const directLink = (q.linkSoalan && q.linkSoalan.startsWith('http')) ? q.linkSoalan : (gasWebAppUrl 
-                                    ? `${gasWebAppUrl}${gasWebAppUrl.includes('?') ? '&' : '?'}qid=${q.idSoalan}`
-                                    : `${window.location.origin}/?qid=${q.idSoalan}&spreadsheetId=${spreadsheetId}&gasWebAppUrl=${encodeURIComponent(gasWebAppUrl)}`);
+                                const directLink = buildGoogleSiteLink(q.idSoalan, customSitesBaseUrl);
                                 navigator.clipboard.writeText(directLink);
-                                alert("Pautan terus murid berjaya disalin!");
+                                alert("Pautan Google Site soalan berjaya disalin!");
                               }}
-                              className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center transition border border-slate-200 shadow-sm"
+                              className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center transition border border-slate-200 shadow-sm gap-1.5"
                             >
-                              <Link className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                              Salin Link Terus
+                              <Globe className="w-3.5 h-3.5 text-blue-500" />
+                              Salin Link Google Site
                             </button>
                           </div>
                         )}
@@ -1334,6 +1402,110 @@ export default function BankSoalan({
         spreadsheetId={spreadsheetId}
         user={user}
       />
+
+      {/* MODAL PENUKARAN SEMUA LINK SHEET1 KEPADA GOOGLE SITES */}
+      {showSitesSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            
+            {/* Header */}
+            <div className="px-6 py-4.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-xl shadow-inner border border-white/20">
+                  🌐
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black tracking-tight">Tukar Semua Link Sheet1 ke Google Site</h2>
+                  <p className="text-xs text-blue-100 font-medium">Kemas kini pautan soalan dalam tab Sheet1 (Lajur I) secara pukal</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSitesSettingsModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-blue-800 text-sm">
+                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  <span>Maklumat Operasi Kemas Kini</span>
+                </div>
+                <p className="leading-relaxed">
+                  Sistem akan mengimbas kesemua <strong>{questions.length}</strong> soalan dalam tab <strong>Sheet1</strong> di Google Spreadsheet anda. Semua pautan lama yang menggunakan Google Apps Script (<code>script.google.com</code>) akan digantikan secara automatik kepada format <strong>Google Sites</strong> yang responsif.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                  <div className="bg-white p-2 rounded-xl border border-blue-100">
+                    <span className="text-slate-500 block text-[10px]">Jumlah Soalan:</span>
+                    <strong className="text-slate-800 text-sm">{questions.length}</strong>
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-blue-100">
+                    <span className="text-slate-500 block text-[10px]">Pautan Script Google:</span>
+                    <strong className="text-amber-600 text-sm">
+                      {questions.filter(q => q.linkSoalan && q.linkSoalan.includes('script.google.com')).length}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  URL Portal Google Sites Anda (Pilihan):
+                </label>
+                <input
+                  type="url"
+                  placeholder="Contoh: https://sites.google.com/view/portal-sains-sekolah"
+                  value={customSitesBaseUrl}
+                  onChange={(e) => setCustomSitesBaseUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition font-mono"
+                />
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  💡 Sekiranya anda mempunyai laman Google Sites rasmi, masukkan URL di atas. Jika dibiarkan kosong, sistem akan menggunakan format pautan Google Sites langsung sistem (<code>?qid=...&mod=sites&embed=sites</code>) yang boleh disematkan ke mana-mana laman Google Sites.
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+                <span className="text-base">⚡</span>
+                <span>
+                  Kemas kini ini akan menulis semula nilai dalam <strong>Lajur I (LINK SOALAN)</strong> pada tab <strong>Sheet1</strong> Google Sheets anda dan menyegerakkannya serentak ke sistem.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowSitesSettingsModal(false)}
+                disabled={isConvertingLinks}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleConvertSheet1ToSites}
+                disabled={isConvertingLinks}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"
+              >
+                {isConvertingLinks ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Mengemas kini Sheet1...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4" />
+                    <span>Kemas Kini Sheet1 Sekarang</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

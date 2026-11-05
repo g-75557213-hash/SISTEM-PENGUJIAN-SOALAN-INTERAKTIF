@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission } from '../lib/classroom';
 import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check, Code2 } from 'lucide-react';
-import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet } from '../lib/sheets';
+import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, buildGoogleSiteLink } from '../lib/sheets';
 import { logout } from '../lib/firebase';
 import GoogleSitesModal from './GoogleSitesModal';
 
@@ -126,7 +126,7 @@ export default function SemakanGuru({
                     kod: cleanKod,
                     qid: sa.qid,
                     kelas: sa.kelas,
-                    linkSoalan: sa.link,
+                    linkSoalan: (sa.link && !sa.link.includes('script.google.com')) ? sa.link : buildGoogleSiteLink(sa.qid),
                     namaGuru: cleanNamaInSheet || existing?.guruNama || user?.displayName || '',
                     soalanTajuk: existing?.soalanTajuk || matchedQ?.bab || sa.qid,
                     tingkatan: existing?.tingkatan || matchedQ?.tingkatan || '',

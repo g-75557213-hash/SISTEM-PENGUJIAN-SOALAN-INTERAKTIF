@@ -1,4 +1,35 @@
 
+/**
+ * Membina pautan Google Site yang sah dan responsif bagi sesebuah soalan.
+ * Menyokong sama ada URL portal Google Sites tersuai milik guru (contoh: https://sites.google.com/view/portal-sains)
+ * atau format pautan responsif Google Sites sistem (?qid=...&mod=sites&embed=sites).
+ */
+export function buildGoogleSiteLink(
+  qid: string,
+  customBaseUrl?: string,
+  extraParams?: { kod?: string; kelas?: string; tugasan?: string }
+): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const storedSite = typeof window !== 'undefined' ? localStorage.getItem('google_site_base_url') : null;
+  const baseUrl = (customBaseUrl || storedSite || '').trim();
+
+  const searchParams = new URLSearchParams();
+  searchParams.set('qid', qid);
+  if (extraParams?.kod) searchParams.set('kod', extraParams.kod);
+  if (extraParams?.kelas) searchParams.set('kelas', extraParams.kelas);
+  if (extraParams?.tugasan) searchParams.set('tugasan', extraParams.tugasan);
+  searchParams.set('mod', 'sites');
+  searchParams.set('embed', 'sites');
+
+  if (baseUrl && baseUrl.startsWith('http')) {
+    const cleanBase = baseUrl.replace(/\/+$/, '');
+    const separator = cleanBase.includes('?') ? '&' : '?';
+    return `${cleanBase}${separator}${searchParams.toString()}`;
+  }
+
+  return `${origin}/?${searchParams.toString()}`;
+}
+
 function chunkHtml(html: string): string[] {
   const MAX_CELL_LENGTH = 49000;
   if (!html) return [""];
@@ -142,34 +173,28 @@ export async function saveQuestionToSheets(
     if (rowMatch) {
       const rowNum = parseInt(rowMatch[0], 10);
       
-      // 1. Instant fallback pre-calculation
+      // 1. Instant calculation ID Soalan
       idSoalan = `SQ-${String(rowNum - 1).padStart(4, '0')}`;
       
-      const defaultGasUrl = "https://script.google.com/macros/s/AKfycbyBL3nng7I0_ADtD7raoMJhrw1Z41KU_dnxBQi9cYRr2WbfD59kLnPvKsazRcz6-H2acg/exec";
-      const activeGasUrl = gasWebAppUrl || defaultGasUrl;
-      linkSoalan = `${activeGasUrl}${activeGasUrl.includes('?') ? '&' : '?'}qid=${idSoalan}`;
+      // Gunakan link Google Site sebagai default utama (bukan lagi Google Apps Script)
+      linkSoalan = buildGoogleSiteLink(idSoalan);
 
-      // 2. Fetch the actual computed values from Sheets (if the formula is already calculated)
+      // 2. Tulis terus ID Soalan (Lajur H) dan LINK SOALAN Google Site (Lajur I) ke Google Sheets
       try {
-        // Wait a small moment to let the array formula calculate
-        await new Promise(r => setTimeout(r, 800));
-        
-        const rowRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A${rowNum}:I${rowNum}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!H${rowNum}:I${rowNum}?valueInputOption=USER_ENTERED`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            range: `${sheetName}!H${rowNum}:I${rowNum}`,
+            majorDimension: 'ROWS',
+            values: [[idSoalan, linkSoalan]]
+          })
         });
-        if (rowRes.ok) {
-          const rowData = await rowRes.json();
-          if (rowData.values && rowData.values[0]) {
-            const sheetIdSoalan = rowData.values[0][7];
-            const sheetLinkSoalan = rowData.values[0][8];
-            if (sheetIdSoalan) idSoalan = sheetIdSoalan;
-            if (sheetLinkSoalan && sheetLinkSoalan.startsWith("http")) {
-              linkSoalan = sheetLinkSoalan;
-            }
-          }
-        }
       } catch (err) {
-        console.error('Failed to fetch generated ID and Link:', err);
+        console.warn('Gagal menulis ID dan Link terus ke Sheet1:', err);
       }
     }
   }
@@ -355,17 +380,134 @@ export async function getQuestionsFromSheets(token: string, spreadsheetIdInput?:
   
   const startIdx = hasHeader ? 1 : 0;
   
-  return rows.slice(startIdx).map((row: any[]) => ({
-    timestamp: row[0] || '',
-    namaGuru: row[1] || '',
-    tingkatan: row[2] || '',
-    subjek: row[3] || '',
-    bab: row[4] || '',
-    sp: row[5] || '',
-    html: row[6] || '',
-    idSoalan: row[7] || '',
-    linkSoalan: row[8] || ''
-  })).reverse(); // Reverse so newest is first
+  return rows.slice(startIdx).map((row: any[], idx: number) => {
+    const rowNum = startIdx + idx + 1;
+    const idSoalan = (row[7] || '').trim() || `SQ-${String(rowNum - 1).padStart(4, '0')}`;
+    let linkSoalan = (row[8] || '').trim();
+    
+    // Pastikan sebarang link Google Script lama (script.google.com) atau link kosong ditukarkan serta-merta kepada link Google Site!
+    if (!linkSoalan || linkSoalan.includes('script.google.com') || !linkSoalan.startsWith('http')) {
+      linkSoalan = buildGoogleSiteLink(idSoalan);
+    }
+
+    return {
+      timestamp: row[0] || '',
+      namaGuru: row[1] || '',
+      tingkatan: row[2] || '',
+      subjek: row[3] || '',
+      bab: row[4] || '',
+      sp: row[5] || '',
+      html: row[6] || '',
+      idSoalan,
+      linkSoalan
+    };
+  }).reverse(); // Reverse so newest is first
+}
+
+/**
+ * Mengubah semua link Google Script dalam tab Sheet1 (Lajur I) kepada link Google Site.
+ * Mengemas kini Google Sheets dan cache Firestore secara serentak.
+ */
+export async function convertAllSheet1LinksToGoogleSites(
+  token: string,
+  spreadsheetIdInput?: string,
+  customSiteBaseUrl?: string
+): Promise<{ total: number; updated: number; message: string }> {
+  const spreadsheetId = spreadsheetIdInput || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+  const sheetName = await getFirstSheetName(token, spreadsheetId);
+
+  // 1. Ambil data sedia ada dari Sheet1 (A:I)
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:I`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('UNAUTHENTICATED');
+    throw new Error('Gagal membaca data dari Sheet1');
+  }
+
+  const data = await res.json();
+  const rows: any[][] = data.values || [];
+  if (rows.length <= 1) {
+    return { total: 0, updated: 0, message: 'Tiada soalan ditemui dalam Sheet1.' };
+  }
+
+  const firstRow = rows[0];
+  const hasHeader = firstRow && firstRow[0] && (
+    firstRow[0].toLowerCase().includes('time') || 
+    firstRow[0].toLowerCase().includes('timestamp') || 
+    firstRow[1]?.toLowerCase().includes('nama')
+  );
+  const startIdx = hasHeader ? 1 : 0;
+
+  const linksColValues: string[][] = [];
+  const updatedList: { id: string; link: string }[] = [];
+  let updatedCount = 0;
+
+  for (let i = startIdx; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNum = i + 1;
+    const currentId = (row[7] || '').trim() || `SQ-${String(rowNum - 1).padStart(4, '0')}`;
+    const currentLink = (row[8] || '').trim();
+
+    // Jana link Google Site responsif
+    const newSiteLink = buildGoogleSiteLink(currentId, customSiteBaseUrl);
+
+    if (currentLink.includes('script.google.com') || currentLink !== newSiteLink || !currentLink.startsWith('http')) {
+      updatedCount++;
+    }
+
+    linksColValues.push([newSiteLink]);
+    updatedList.push({ id: currentId, link: newSiteLink });
+  }
+
+  // 2. Tulis balik semua link Google Site ke Lajur I dalam Sheet1
+  const startRow = startIdx + 1;
+  const endRow = startIdx + linksColValues.length;
+  const targetRange = `${sheetName}!I${startRow}:I${endRow}`;
+
+  const updateRes = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        range: targetRange,
+        majorDimension: 'ROWS',
+        values: linksColValues
+      })
+    }
+  );
+
+  if (!updateRes.ok) {
+    const errText = await updateRes.text();
+    console.warn('Amaran: Gagal menulis link ke Sheet1:', errText);
+    throw new Error('Gagal mengemas kini lajur I di Google Sheets: ' + errText);
+  }
+
+  // 3. Kemas kini cache Firestore melalui endpoint pelayan secara serentak
+  try {
+    await Promise.all(
+      updatedList.map(item =>
+        fetch('/api/update-question-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idSoalan: item.id, linkSoalan: item.link })
+        }).catch(() => {})
+      )
+    );
+  } catch (err) {
+    console.warn('Ralat mengemas kini cache Firestore:', err);
+  }
+
+  return {
+    total: linksColValues.length,
+    updated: updatedCount,
+    message: `Berjaya mengemas kini ${updatedCount} daripada ${linksColValues.length} pautan soalan ke link Google Site!`
+  };
 }
 
 export async function saveTugasanToSheets(

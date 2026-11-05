@@ -29,6 +29,9 @@ export default function App() {
   const [driveFolderLink, setDriveFolderLink] = useState(() => {
     return localStorage.getItem('smkj_drive_folder_link') || '';
   });
+  const [googleSiteBaseUrl, setGoogleSiteBaseUrl] = useState(() => {
+    return localStorage.getItem('google_site_base_url') || '';
+  });
 
   const [kodParam, setKodParam] = useState<string | null>(null);
   const [kelasParam, setKelasParam] = useState<string | null>(null);
@@ -1621,6 +1624,9 @@ function syncClassroom() {
                 });
                 setActiveTab('bina');
               }}
+              onRefreshQuestions={async () => {
+                if (token) await loadData(token, spreadsheetId);
+              }}
             />
           )}
         </main>
@@ -2310,6 +2316,22 @@ function syncClassroom() {
                     />
                     <p className="text-[10px] text-slate-400 mt-0.5">Sila pastikan folder ini telah dikongsi "Anyone with the link can view".</p>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">URL Portal Google Sites Anda (Pilihan)</label>
+                    <input 
+                      type="text"
+                      value={googleSiteBaseUrl}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setGoogleSiteBaseUrl(val);
+                        localStorage.setItem('google_site_base_url', val);
+                      }}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-mono text-slate-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Contoh: https://sites.google.com/view/portal-sains"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Sekiranya anda mempunyai laman Google Sites, masukkan di sini untuk pautan terus murid.</p>
+                  </div>
                 </div>
 
                 <div className="flex gap-2 justify-end mt-2">
@@ -2337,10 +2359,10 @@ function syncClassroom() {
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-1.5 text-slate-800 font-bold text-sm">
                   <span>💻</span>
-                  <h3>Penerapan Google Apps Script (Tanpa Sekatan Murid)</h3>
+                  <h3>Penerapan Google Apps Script & Pautan Google Sites</h3>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed font-semibold text-amber-600 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
-                  💡 Panduan Penting: Sila deploy/penerapan dengan konfigurasi di bawah supaya murid anda boleh menjawab kuiz secara langsung tanpa perlu melalui paparan sekatan / kebenaran akses (Authorization Required) daripada Google!
+                  💡 Panduan Penting: Sistem kini dioptimumkan sepenuhnya untuk <strong>Google Sites</strong> tanpa sekatan murid. Pautan soalan dijana mengikut format responsif Google Sites.
                 </p>
                 <ol className="text-xs text-slate-500 list-decimal pl-5 space-y-1.5">
                   <li>Di Google Spreadsheet anda, pergi ke menu <strong>Extensions &gt; Apps Script</strong>.</li>
@@ -2365,10 +2387,10 @@ function syncClassroom() {
                           A: KELAS, B: ID SOALAN, C: NAMA TUGASAN, D: KOD, E: NAMA GURU, F: LINK TUGASAN, G: COURSE ID, H: COURSEWORK ID
                         </div>
                       </li>
-                      <li>Di sel <strong className="text-blue-600 font-bold">F1</strong> (tajuk lajur LINK TUGASAN), masukkan formula ARRAYFORMULA di bawah untuk menjana pautan soalan unik secara automatik (pastikan kod Web App di dalam formula di bawah adalah betul):
+                      <li>Di sel <strong className="text-blue-600 font-bold">F1</strong> (tajuk lajur LINK TUGASAN), masukkan formula ARRAYFORMULA di bawah untuk menjana pautan soalan Google Sites secara automatik:
                         <textarea
                           readOnly
-                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${gasWebAppUrl || 'https://script.google.com/macros/s/AKfycbyBL3nng7I0_ADtD7raoMJhrw1Z41KU_dnxBQi9cYRr2WbfD59kLnPvKsazRcz6-H2acg/exec'}?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D)))}`}
+                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${(googleSiteBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''))}/?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D) & "&mod=sites&embed=sites"))}`}
                           className="w-full mt-1.5 p-2 font-mono text-[10px] text-emerald-400 bg-slate-950 border border-slate-800 rounded focus:outline-none focus:ring-0 select-all whitespace-pre-wrap leading-relaxed cursor-pointer"
                           rows={3}
                           onClick={(e) => {

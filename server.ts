@@ -734,6 +734,23 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
+  app.post("/api/update-question-link", async (req, res) => {
+    try {
+      const { idSoalan, linkSoalan } = req.body;
+      if (!idSoalan) {
+        return res.status(400).json({ error: "Missing idSoalan" });
+      }
+      await db.collection("questions").doc(String(idSoalan)).set({
+        linkSoalan: linkSoalan || "",
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      res.json({ success: true, message: "Pautan soalan berjaya dikemaskini" });
+    } catch (error) {
+      console.error("Error updating question link:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/question", async (req, res) => {
     try {
       const { qid, spreadsheetId } = req.query;
