@@ -134,6 +134,34 @@ export default function GoogleSitesModal({
     setTimeout(() => setCopiedUrl(false), 2500);
   };
 
+  const handleExportAndLaunchSites = () => {
+    handleEnsureSaved();
+    navigator.clipboard.writeText(embedCodeSnippet);
+    setCopiedEmbed(true);
+    window.open('https://sites.google.com/new', '_blank');
+    alert(
+      `🚀 Kod Sematan Google Sites telah disalin ke papan keratan (clipboard)!\n\n` +
+      `Laman editor Google Sites telah dibuka di tab baharu.\n` +
+      `Sila pada editor Google Sites:\n` +
+      `1. Klik 'Insert' (Sisip) ➔ 'Embed' (Sematkan).\n` +
+      `2. Pilih 'Embed code' dan tampal (Ctrl+V) kod tersebut.\n` +
+      `3. Klik 'Publish' (Siarkan).`
+    );
+  };
+
+  const handleDownloadHtmlFile = () => {
+    handleEnsureSaved();
+    const blob = new Blob([question.html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${question.idSoalan}_${(question.bab || 'soalan').replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
@@ -492,19 +520,38 @@ export default function GoogleSitesModal({
             <span>Markah murid akan direkodkan automatik ke tab <strong>TUGASAN UMUM</strong> &amp; <strong>Markah Murid</strong> Google Sheets.</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={onClose}
-              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+              onClick={handleDownloadHtmlFile}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              title="Muat turun fail HTML penuh soalan"
             >
-              Tutup
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+              <span>Muat Turun HTML</span>
             </button>
+
             <button
               onClick={copyEmbedCode}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
             >
-              {copiedEmbed ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-              <span>Salin Kod &amp; Gunakan</span>
+              {copiedEmbed ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
+              <span>Salin Kod</span>
+            </button>
+
+            <button
+              onClick={handleExportAndLaunchSites}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 shadow-sm cursor-pointer"
+              title="Salin kod & buka editor Google Sites dalam tab baharu"
+            >
+              <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
+              <span>🚀 Eksport &amp; Terbitkan ke Google Sites</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              Tutup
             </button>
           </div>
         </div>
