@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan reka bentuk untuk Tugasan Umum supaya sentiasa memaparkan skrin pengesahan nama murid sebelum menjawab, serta mengekstrak nama daripada akaun Google/Chrome yang terlog masuk sebagai pra-isian (pre-fill) yang boleh diedit oleh murid.",
-  "updatedAt": "2026-11-04T03:37:10.430823112Z",
+  "summary": "Pelan komprehensif bagi integrasi Google Sites: Penjanaan kod embed HTML responsif dan pautan khas soalan untuk disematkan ke dalam Google Sites guru, lengkap dengan sokongan penyerahan dan penyegerakan markah murid secara automatik ke pangkalan data sistem dan tab Markah Murid Google Sheets.",
+  "updatedAt": "2026-11-05T04:32:31.816693603Z",
   "requestFeedback": true,
   "userFacing": true
 }

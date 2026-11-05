@@ -265,6 +265,8 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
           email: email || '',
           sijilBase64: sijilBase64 || null,
           isUmum: true,
+          isSites: Boolean(req.body.isSites),
+          source: req.body.isSites ? 'Google Sites' : 'Tugasan Umum',
           updatedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
         };
 

@@ -27,10 +27,11 @@ export default function StudentView({
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const currentKod = initialKod || urlParams?.get('kod') || '';
   const currentKelasParam = initialKelas || urlParams?.get('kelas') || '';
+  const isSitesMode = urlParams?.get('embed') === 'sites';
   
-  // Public Mode (Tugasan Umum) state - Strictly NO Google/Chrome Login required!
+  // Public Mode (Tugasan Umum & Google Sites) state - Strictly NO Google/Chrome Login required!
   const [isPublicMode, setIsPublicMode] = useState<boolean>(() => {
-    return initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
+    return isSitesMode || initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
   });
 
   const [publicNama, setPublicNama] = useState('');
@@ -200,8 +201,8 @@ export default function StudentView({
             </div>
             
             <div className="flex justify-center mb-2">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-[11px] font-black px-3.5 py-1 rounded-full border border-emerald-300 shadow-xs uppercase tracking-wide">
-                <span>✨</span> MOD UMUM • TIADA LOG MASUK CHROME
+              <span className={`inline-flex items-center gap-1.5 ${isSitesMode ? 'bg-blue-100 text-blue-900 border-blue-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'} text-[11px] font-black px-3.5 py-1 rounded-full border shadow-xs uppercase tracking-wide`}>
+                <span>{isSitesMode ? '🌐' : '✨'}</span> {isSitesMode ? 'MOD GOOGLE SITES • TIADA LOG MASUK CHROME' : 'MOD UMUM • TIADA LOG MASUK CHROME'}
               </span>
             </div>
 
@@ -330,10 +331,12 @@ export default function StudentView({
                 nama: "${publicNama.replace(/"/g, '\\"')}",
                 markah: markah !== undefined && markah !== null ? Number(markah) : null,
                 status: status || 'Selesai',
-                isUmum: true
+                isUmum: true,
+                isSites: ${isSitesMode ? 'true' : 'false'},
+                spreadsheetId: "${spreadsheetId || ''}"
               })
             }).then(function(res) { return res.json(); }).then(function(data) {
-              console.log("Markah tugasan umum berjaya direkod:", data);
+              console.log("Markah tugasan berjaya direkod:", data);
             }).catch(function(err) {
               console.error("Ralat simpan markah:", err);
             });
@@ -350,15 +353,15 @@ export default function StudentView({
 
     return (
       <div className="h-screen w-screen flex flex-col bg-slate-50 overflow-hidden">
-        {/* TOP BAR FOR PUBLIC MODE */}
-        <div className="bg-white px-4 py-2.5 border-b border-slate-200 flex justify-between items-center shrink-0 shadow-xs z-10">
+        {/* TOP BAR FOR PUBLIC / GOOGLE SITES MODE */}
+        <div className={`bg-white ${isSitesMode ? 'px-3 py-1.5' : 'px-4 py-2.5'} border-b border-slate-200 flex justify-between items-center shrink-0 shadow-xs z-10`}>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
-              📝
+            <div className={`w-7 h-7 rounded-lg ${isSitesMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-bold text-xs`}>
+              {isSitesMode ? '🌐' : '📝'}
             </div>
             <div>
               <div className="font-extrabold text-xs sm:text-sm text-slate-800 leading-tight">
-                Tugasan Interaktif
+                {isSitesMode ? 'Google Sites • Kuiz Interaktif' : 'Tugasan Interaktif'}
               </div>
               {currentKod && (
                 <div className="text-[10px] text-blue-600 font-mono font-bold leading-none">
@@ -379,7 +382,7 @@ export default function StudentView({
             </div>
             <button 
               onClick={() => setIsPublicStarted(false)}
-              className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg font-bold border border-slate-200 transition"
+              className="text-[10px] sm:text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 sm:px-2.5 py-1 rounded-lg font-bold border border-slate-200 transition cursor-pointer"
               title="Tukar Maklumat Pelajar"
             >
               Tukar

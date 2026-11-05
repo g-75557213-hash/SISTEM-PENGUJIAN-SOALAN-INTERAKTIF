@@ -1599,3 +1599,64 @@ export async function deleteSingleMarkahMuridRowFromSheet(
     return false;
   }
 }
+
+/**
+ * Menambah satu baris rekod markah murid terus ke tab "Markah Murid"
+ * Lajur rasmi 10:
+ * [Waktu Menjawab, ID Soalan, Nama Murid, Email Murid, Kelas, Tugasan, Markah (%), Status, Status Sync GC, Kod Unik]
+ */
+export async function appendMarkahMuridRow(
+  token: string | null | undefined,
+  spreadsheetId: string | null | undefined,
+  sub: {
+    waktu?: string;
+    qid: string;
+    nama: string;
+    email?: string;
+    kelas?: string;
+    tugasan?: string;
+    markah: number | string | null;
+    status?: string;
+    statusSyncGc?: string;
+    kodUnik?: string;
+  }
+): Promise<boolean> {
+  try {
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+    const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+    if (!activeToken || !activeSheetId) return false;
+
+    const rowValues = [
+      sub.waktu || new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' }),
+      (sub.qid || '').toString().trim().toUpperCase(),
+      (sub.nama || '').toString().trim().toUpperCase(),
+      (sub.email || '').toString().trim(),
+      (sub.kelas || '').toString().trim().toUpperCase(),
+      (sub.tugasan || 'TUGASAN GOOGLE SITES').toString().trim(),
+      sub.markah !== undefined && sub.markah !== null ? `${sub.markah}%` : '-',
+      sub.status || 'Selesai',
+      sub.statusSyncGc || 'Google Sites',
+      (sub.kodUnik || '').toString().trim().toUpperCase()
+    ];
+
+    const appendRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${activeSheetId}/values/${encodeURIComponent("'Markah Murid'!A:J:append")}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${activeToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          values: [rowValues]
+        })
+      }
+    );
+
+    return appendRes.ok;
+  } catch (err) {
+    console.error('Error appending markah murid row:', err);
+    return false;
+  }
+}

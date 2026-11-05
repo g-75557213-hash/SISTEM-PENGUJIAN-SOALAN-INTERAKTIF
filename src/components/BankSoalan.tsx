@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
+import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2, Code2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
 import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
 import { createAssignment, deleteAssignment } from '../lib/classroom';
 import { logout } from '../lib/firebase';
 import WaygroundSection from './WaygroundSection';
+import GoogleSitesModal from './GoogleSitesModal';
 
 interface BankSoalanProps {
   user: any;
@@ -62,6 +63,15 @@ export default function BankSoalan({
   const [copiedPublicLink, setCopiedPublicLink] = useState(false);
   const [copiedPublicWa, setCopiedPublicWa] = useState(false);
   const [deletingPublicKod, setDeletingPublicKod] = useState<string | null>(null);
+
+  // Google Sites Integration states
+  const [showGoogleSitesModal, setShowGoogleSitesModal] = useState(false);
+  const [googleSitesQ, setGoogleSitesQ] = useState<SoalanData | null>(null);
+
+  const handleOpenGoogleSitesModal = (q: SoalanData) => {
+    setGoogleSitesQ(q);
+    setShowGoogleSitesModal(true);
+  };
 
   const handleOpenPublicModal = async (q: SoalanData) => {
     setPublicModalQ(q);
@@ -649,6 +659,14 @@ export default function BankSoalan({
                               Link Tugasan Umum (Tanpa GC)
                             </button>
                             <button 
+                              onClick={() => handleOpenGoogleSitesModal(q)}
+                              className="w-full bg-gradient-to-r from-blue-700 via-indigo-600 to-sky-600 hover:from-blue-800 hover:to-indigo-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
+                              title="Jana kod embed HTML & pautan khas untuk Google Sites"
+                            >
+                              <Code2 className="w-3.5 h-3.5 mr-1.5" />
+                              🌐 Embed Google Sites
+                            </button>
+                            <button 
                               onClick={() => openSendModal(q)}
                               disabled={loadingQ[q.idSoalan]}
                               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm"
@@ -712,6 +730,14 @@ export default function BankSoalan({
                             >
                               <Globe className="w-3.5 h-3.5 mr-1.5" />
                               Link Tugasan Umum (Tanpa GC)
+                            </button>
+                            <button 
+                              onClick={() => handleOpenGoogleSitesModal(q)}
+                              className="w-full bg-gradient-to-r from-blue-700 via-indigo-600 to-sky-600 hover:from-blue-800 hover:to-indigo-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
+                              title="Jana kod embed HTML & pautan khas untuk Google Sites"
+                            >
+                              <Code2 className="w-3.5 h-3.5 mr-1.5" />
+                              🌐 Embed Google Sites
                             </button>
                             <button 
                               onClick={() => openSendModal(q)}
@@ -1297,6 +1323,17 @@ export default function BankSoalan({
           </div>
         </div>
       )}
+
+      {/* MODAL INTEGRASI GOOGLE SITES */}
+      <GoogleSitesModal
+        isOpen={showGoogleSitesModal}
+        onClose={() => setShowGoogleSitesModal(false)}
+        question={googleSitesQ}
+        classes={classes}
+        token={token}
+        spreadsheetId={spreadsheetId}
+        user={user}
+      />
     </div>
   );
 }
