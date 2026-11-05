@@ -29,9 +29,6 @@ export default function App() {
   const [driveFolderLink, setDriveFolderLink] = useState(() => {
     return localStorage.getItem('smkj_drive_folder_link') || '';
   });
-  const [googleSiteBaseUrl, setGoogleSiteBaseUrl] = useState(() => {
-    return localStorage.getItem('google_site_base_url') || '';
-  });
 
   const [kodParam, setKodParam] = useState<string | null>(null);
   const [kelasParam, setKelasParam] = useState<string | null>(null);
@@ -2316,22 +2313,6 @@ function syncClassroom() {
                     />
                     <p className="text-[10px] text-slate-400 mt-0.5">Sila pastikan folder ini telah dikongsi "Anyone with the link can view".</p>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">URL Portal Google Sites Anda (Pilihan)</label>
-                    <input 
-                      type="text"
-                      value={googleSiteBaseUrl}
-                      onChange={(e) => {
-                        const val = e.target.value.trim();
-                        setGoogleSiteBaseUrl(val);
-                        localStorage.setItem('google_site_base_url', val);
-                      }}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-mono text-slate-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Contoh: https://sites.google.com/view/portal-sains"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-0.5">Sekiranya anda mempunyai laman Google Sites, masukkan di sini untuk pautan terus murid.</p>
-                  </div>
                 </div>
 
                 <div className="flex gap-2 justify-end mt-2">
@@ -2359,10 +2340,10 @@ function syncClassroom() {
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-1.5 text-slate-800 font-bold text-sm">
                   <span>💻</span>
-                  <h3>Penerapan Google Apps Script & Pautan Google Sites</h3>
+                  <h3>Penerapan Google Apps Script & Direct Link System</h3>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed font-semibold text-amber-600 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
-                  💡 Panduan Penting: Sistem kini dioptimumkan sepenuhnya untuk <strong>Google Sites</strong> tanpa sekatan murid. Pautan soalan dijana mengikut format responsif Google Sites.
+                <p className="text-xs text-slate-600 leading-relaxed font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg">
+                  💡 Panduan Penting: Sistem dioptimumkan sepenuhnya menggunakan <strong>Direct Link Aplikasi</strong> tanpa sebarang sekatan log masuk atau ralat storan awan.
                 </p>
                 <ol className="text-xs text-slate-500 list-decimal pl-5 space-y-1.5">
                   <li>Di Google Spreadsheet anda, pergi ke menu <strong>Extensions &gt; Apps Script</strong>.</li>
@@ -2375,7 +2356,7 @@ function syncClassroom() {
                       <li><strong className="text-blue-600">Execute as (Jalankan sebagai):</strong> <code>Me (e-mel anda)</code> (PENTING: supaya dijalankan dengan kredibiliti anda, jadi pelajar tidak memerlukan Authorization)</li>
                       <li><strong className="text-blue-600">Who has access (Siapa yang mempunyai akses):</strong> <code>Anyone (Sesiapa sahaja)</code> (PENTING: supaya murid boleh akses tanpa meminta kebenaran akaun)</li>
                     </ul>
-                    <p className="text-[10px] text-emerald-600 mt-1 font-bold italic">Nota: Dengan tetapan ini, murid yang log masuk menggunakan e-mel peribadi (bukan DELIMa) atau tidak log masuk tetap boleh membuka pautan dan akan diminta untuk memasukkan nama dan e-mel mereka melalui paparan pop-up.</p>
+                    <p className="text-[10px] text-emerald-600 mt-1 font-bold italic">Nota: Dengan tetapan ini, murid yang log masuk menggunakan e-mel peribadi (bukan DELIMa) atau tidak log masuk tetap boleh membuka pautan dan akan diminta untuk memasukkan nama mereka melalui paparan pop-up.</p>
                   </li>
                   <li>Klik butang <strong>Deploy</strong>. Berikan kelulusan kebenaran akaun anda (klik "Review Permissions", pilih akaun DELIMa anda, klik "Advanced", pilih "Go to Soalan Interaktif (unsafe)", dan klik "Allow").</li>
                   <li>Salin URL yang dijana di bawah tajuk <strong>Web app URL</strong>, tampalkan URL tersebut ke dalam kotak input "URL Web App Google Apps Script" di atas, dan klik <strong>Uji & Sambung Database</strong>.</li>
@@ -2387,10 +2368,10 @@ function syncClassroom() {
                           A: KELAS, B: ID SOALAN, C: NAMA TUGASAN, D: KOD, E: NAMA GURU, F: LINK TUGASAN, G: COURSE ID, H: COURSEWORK ID
                         </div>
                       </li>
-                      <li>Di sel <strong className="text-blue-600 font-bold">F1</strong> (tajuk lajur LINK TUGASAN), masukkan formula ARRAYFORMULA di bawah untuk menjana pautan soalan Google Sites secara automatik:
+                      <li>Di sel <strong className="text-blue-600 font-bold">F1</strong> (tajuk lajur LINK TUGASAN), masukkan formula ARRAYFORMULA di bawah untuk menjana pautan terus soalan secara automatik:
                         <textarea
                           readOnly
-                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${(googleSiteBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''))}/?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D) & "&mod=sites&embed=sites"))}`}
+                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${(typeof window !== 'undefined' ? window.location.origin : '')}/?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D) & "&mod=umum"))}`}
                           className="w-full mt-1.5 p-2 font-mono text-[10px] text-emerald-400 bg-slate-950 border border-slate-800 rounded focus:outline-none focus:ring-0 select-all whitespace-pre-wrap leading-relaxed cursor-pointer"
                           rows={3}
                           onClick={(e) => {

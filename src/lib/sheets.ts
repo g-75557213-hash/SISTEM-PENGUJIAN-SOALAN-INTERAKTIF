@@ -1,44 +1,19 @@
 
 /**
- * Membina pautan awam Google Cloud Storage API bagi sesebuah soalan.
- * Format rasmi Google Cloud Storage: https://storage.googleapis.com/[BUCKET_NAME]/[ID_SOALAN].html
+ * Membina pautan terus murid yang sah dan berfungsi 100% tanpa sebarang ralat.
+ * Format: https://[domain_app]/?qid=SQ-0001&mod=umum
  */
-export function buildGCSLink(
+export function buildDirectLink(
   qid: string,
-  customBucketName?: string
-): string {
-  const storedBucket = typeof window !== 'undefined' ? localStorage.getItem('gcs_bucket_name') : null;
-  const bucket = (customBucketName || storedBucket || 'soalan-interaktif-moe').trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '');
-  return `https://storage.googleapis.com/${bucket}/${qid}.html`;
-}
-
-/**
- * Membina pautan Google Site yang sah dan responsif bagi sesebuah soalan.
- * Menyokong sama ada URL portal Google Sites tersuai milik guru (contoh: https://sites.google.com/view/portal-sains)
- * atau format pautan responsif Google Sites sistem (?qid=...&mod=sites&embed=sites).
- */
-export function buildGoogleSiteLink(
-  qid: string,
-  customBaseUrl?: string,
   extraParams?: { kod?: string; kelas?: string; tugasan?: string }
 ): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const storedSite = typeof window !== 'undefined' ? localStorage.getItem('google_site_base_url') : null;
-  const baseUrl = (customBaseUrl || storedSite || '').trim();
-
   const searchParams = new URLSearchParams();
   searchParams.set('qid', qid);
   if (extraParams?.kod) searchParams.set('kod', extraParams.kod);
   if (extraParams?.kelas) searchParams.set('kelas', extraParams.kelas);
   if (extraParams?.tugasan) searchParams.set('tugasan', extraParams.tugasan);
-  searchParams.set('mod', 'sites');
-  searchParams.set('embed', 'sites');
-
-  if (baseUrl && baseUrl.startsWith('http')) {
-    const cleanBase = baseUrl.replace(/\/+$/, '');
-    const separator = cleanBase.includes('?') ? '&' : '?';
-    return `${cleanBase}${separator}${searchParams.toString()}`;
-  }
+  searchParams.set('mod', 'umum');
 
   return `${origin}/?${searchParams.toString()}`;
 }
@@ -189,10 +164,10 @@ export async function saveQuestionToSheets(
       // 1. Instant calculation ID Soalan
       idSoalan = `SQ-${String(rowNum - 1).padStart(4, '0')}`;
       
-      // Gunakan pautan awam Google Cloud Storage API (storage.googleapis.com)
-      linkSoalan = buildGCSLink(idSoalan);
+      // Gunakan pautan terus murid yang 100% sah dan berfungsi
+      linkSoalan = buildDirectLink(idSoalan);
 
-      // 2. Tulis terus ID Soalan (Lajur H) dan LINK SOALAN GCS (Lajur I) ke Google Sheets
+      // 2. Tulis terus ID Soalan (Lajur H) dan LINK SOALAN Direct (Lajur I) ke Google Sheets
       try {
         await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!H${rowNum}:I${rowNum}?valueInputOption=USER_ENTERED`, {
           method: 'PUT',
@@ -207,15 +182,15 @@ export async function saveQuestionToSheets(
           })
         });
       } catch (err) {
-        console.warn('Gagal menulis ID dan Link GCS terus ke Sheet1:', err);
+        console.warn('Gagal menulis ID dan Link terus ke Sheet1:', err);
       }
     }
   }
 
-  // Save to Firestore and upload HTML to GCS storage API
+  // Save to Firestore questions collection
   if (idSoalan) {
     try {
-      await fetch('/api/upload-gcs', {
+      await fetch('/api/save-question', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -232,7 +207,7 @@ export async function saveQuestionToSheets(
         })
       });
     } catch (e) {
-      console.error('Gagal memuat naik soalan ke Google Cloud Storage:', e);
+      console.error('Gagal menyimpan soalan ke Firestore:', e);
     }
   }
 }
@@ -370,9 +345,6 @@ export async function getQuestionsFromSheets(token: string, spreadsheetIdInput?:
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('UNAUTHENTICATED');
-    if (res.status === 401) {
-      throw new Error('UNAUTHENTICATED');
-    }
     const errorData = await res.text();
     console.error('Sheets API Error:', errorData);
     throw new Error('Failed to fetch questions from sheets');
@@ -398,9 +370,9 @@ export async function getQuestionsFromSheets(token: string, spreadsheetIdInput?:
     const idSoalan = (row[7] || '').trim() || `SQ-${String(rowNum - 1).padStart(4, '0')}`;
     let linkSoalan = (row[8] || '').trim();
     
-    // Pastikan sebarang link Google Script lama (script.google.com) atau link kosong ditukarkan serta-merta kepada link GCS!
-    if (!linkSoalan || linkSoalan.includes('script.google.com') || !linkSoalan.startsWith('http')) {
-      linkSoalan = buildGCSLink(idSoalan);
+    // Pastikan sebarang link Google Script/GCS/Sites lama ditukarkan serta-merta kepada Direct Link!
+    if (!linkSoalan || linkSoalan.includes('script.google.com') || linkSoalan.includes('storage.googleapis.com') || linkSoalan.includes('mod=sites') || !linkSoalan.startsWith('http')) {
+      linkSoalan = buildDirectLink(idSoalan);
     }
 
     return {
@@ -418,125 +390,12 @@ export async function getQuestionsFromSheets(token: string, spreadsheetIdInput?:
 }
 
 /**
- * Mengubah semua link soalan dalam tab Sheet1 (Lajur I) kepada pautan awam Google Cloud Storage (storage.googleapis.com).
+ * Mengubah semua link soalan dalam tab Sheet1 (Lajur I) kepada Direct Link (${origin}/?qid=SQ-XXXX&mod=umum).
  * Mengemas kini Google Sheets dan pelayan / Firestore secara pukal.
  */
-export async function convertAllSheet1LinksToGCS(
+export async function convertAllSheet1LinksToDirect(
   token: string,
-  spreadsheetIdInput?: string,
-  customBucketName?: string
-): Promise<{ total: number; updated: number; message: string }> {
-  const spreadsheetId = spreadsheetIdInput || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
-  const sheetName = await getFirstSheetName(token, spreadsheetId);
-
-  // 1. Ambil data sedia ada dari Sheet1 (A:I)
-  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:I`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  if (!res.ok) {
-    if (res.status === 401) throw new Error('UNAUTHENTICATED');
-    throw new Error('Gagal membaca data dari Sheet1');
-  }
-
-  const data = await res.json();
-  const rows: any[][] = data.values || [];
-  if (rows.length <= 1) {
-    return { total: 0, updated: 0, message: 'Tiada soalan ditemui dalam Sheet1.' };
-  }
-
-  const firstRow = rows[0];
-  const hasHeader = firstRow && firstRow[0] && (
-    firstRow[0].toLowerCase().includes('time') || 
-    firstRow[0].toLowerCase().includes('timestamp') || 
-    firstRow[1]?.toLowerCase().includes('nama')
-  );
-  const startIdx = hasHeader ? 1 : 0;
-
-  const linksColValues: string[][] = [];
-  const updatedList: { id: string; html: string; link: string }[] = [];
-  let updatedCount = 0;
-
-  for (let i = startIdx; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 1;
-    const currentId = (row[7] || '').trim() || `SQ-${String(rowNum - 1).padStart(4, '0')}`;
-    const currentLink = (row[8] || '').trim();
-    const htmlCode = row[6] || '';
-
-    // Jana link Google Cloud Storage awam
-    const newGcsLink = buildGCSLink(currentId, customBucketName);
-
-    if (currentLink !== newGcsLink || !currentLink.includes('storage.googleapis.com')) {
-      updatedCount++;
-    }
-
-    linksColValues.push([newGcsLink]);
-    updatedList.push({ id: currentId, html: htmlCode, link: newGcsLink });
-  }
-
-  // 2. Tulis balik semua link Google Cloud Storage ke Lajur I dalam Sheet1
-  const startRow = startIdx + 1;
-  const endRow = startIdx + linksColValues.length;
-  const targetRange = `${sheetName}!I${startRow}:I${endRow}`;
-
-  const updateRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        range: targetRange,
-        majorDimension: 'ROWS',
-        values: linksColValues
-      })
-    }
-  );
-
-  if (!updateRes.ok) {
-    const errText = await updateRes.text();
-    console.warn('Amaran: Gagal menulis link GCS ke Sheet1:', errText);
-    throw new Error('Gagal mengemas kini lajur I di Google Sheets: ' + errText);
-  }
-
-  // 3. Kemas kini pelayan backend GCS storage & Firestore secara pukal
-  try {
-    await Promise.all(
-      updatedList.map(item =>
-        fetch('/api/upload-gcs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idSoalan: item.id,
-            html: item.html,
-            bucketName: customBucketName,
-            linkSoalan: item.link
-          })
-        }).catch(() => {})
-      )
-    );
-  } catch (err) {
-    console.warn('Ralat muat naik pukal GCS:', err);
-  }
-
-  return {
-    total: linksColValues.length,
-    updated: updatedCount,
-    message: `Berjaya mengemas kini ${updatedCount} daripada ${linksColValues.length} pautan soalan ke Google Cloud Storage Awam!`
-  };
-}
-
-/**
- * Mengubah semua link Google Script dalam tab Sheet1 (Lajur I) kepada link Google Site.
- * Mengemas kini Google Sheets dan cache Firestore secara serentak.
- */
-export async function convertAllSheet1LinksToGoogleSites(
-  token: string,
-  spreadsheetIdInput?: string,
-  customSiteBaseUrl?: string
+  spreadsheetIdInput?: string
 ): Promise<{ total: number; updated: number; message: string }> {
   const spreadsheetId = spreadsheetIdInput || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
   const sheetName = await getFirstSheetName(token, spreadsheetId);
@@ -575,18 +434,18 @@ export async function convertAllSheet1LinksToGoogleSites(
     const currentId = (row[7] || '').trim() || `SQ-${String(rowNum - 1).padStart(4, '0')}`;
     const currentLink = (row[8] || '').trim();
 
-    // Jana link Google Site responsif
-    const newSiteLink = buildGoogleSiteLink(currentId, customSiteBaseUrl);
+    // Jana Direct Link sistem
+    const newDirectLink = buildDirectLink(currentId);
 
-    if (currentLink.includes('script.google.com') || currentLink !== newSiteLink || !currentLink.startsWith('http')) {
+    if (currentLink !== newDirectLink || currentLink.includes('script.google.com') || currentLink.includes('storage.googleapis.com') || currentLink.includes('mod=sites')) {
       updatedCount++;
     }
 
-    linksColValues.push([newSiteLink]);
-    updatedList.push({ id: currentId, link: newSiteLink });
+    linksColValues.push([newDirectLink]);
+    updatedList.push({ id: currentId, link: newDirectLink });
   }
 
-  // 2. Tulis balik semua link Google Site ke Lajur I dalam Sheet1
+  // 2. Tulis balik semua Direct Link ke Lajur I dalam Sheet1
   const startRow = startIdx + 1;
   const endRow = startIdx + linksColValues.length;
   const targetRange = `${sheetName}!I${startRow}:I${endRow}`;
@@ -609,7 +468,7 @@ export async function convertAllSheet1LinksToGoogleSites(
 
   if (!updateRes.ok) {
     const errText = await updateRes.text();
-    console.warn('Amaran: Gagal menulis link ke Sheet1:', errText);
+    console.warn('Amaran: Gagal menulis Direct Link ke Sheet1:', errText);
     throw new Error('Gagal mengemas kini lajur I di Google Sheets: ' + errText);
   }
 
@@ -631,7 +490,7 @@ export async function convertAllSheet1LinksToGoogleSites(
   return {
     total: linksColValues.length,
     updated: updatedCount,
-    message: `Berjaya mengemas kini ${updatedCount} daripada ${linksColValues.length} pautan soalan ke link Google Site!`
+    message: `Berjaya mengemas kini ${updatedCount} daripada ${linksColValues.length} pautan soalan ke Direct Link sistem!`
   };
 }
 

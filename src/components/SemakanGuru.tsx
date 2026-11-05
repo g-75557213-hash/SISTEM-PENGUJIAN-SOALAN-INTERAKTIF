@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission } from '../lib/classroom';
-import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check, Code2 } from 'lucide-react';
-import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, buildGoogleSiteLink } from '../lib/sheets';
+import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check } from 'lucide-react';
+import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, buildDirectLink } from '../lib/sheets';
 import { logout } from '../lib/firebase';
-import GoogleSitesModal from './GoogleSitesModal';
 
 export default function SemakanGuru({ 
   user, 
@@ -53,8 +52,6 @@ export default function SemakanGuru({
   const [copiedUmumMarks, setCopiedUmumMarks] = useState(false);
   const [deletingUmumKod, setDeletingUmumKod] = useState<string | null>(null);
   const [deletingScoreKey, setDeletingScoreKey] = useState<string | null>(null);
-  const [showSitesModal, setShowSitesModal] = useState(false);
-  const [sitesModalQuestion, setSitesModalQuestion] = useState<any | null>(null);
 
   const loadTugasanUmumData = async () => {
     try {
@@ -126,7 +123,7 @@ export default function SemakanGuru({
                     kod: cleanKod,
                     qid: sa.qid,
                     kelas: sa.kelas,
-                    linkSoalan: (sa.link && !sa.link.includes('script.google.com')) ? sa.link : buildGoogleSiteLink(sa.qid),
+                    linkSoalan: (sa.link && !sa.link.includes('script.google.com') && !sa.link.includes('storage.googleapis.com')) ? sa.link : buildDirectLink(sa.qid),
                     namaGuru: cleanNamaInSheet || existing?.guruNama || user?.displayName || '',
                     soalanTajuk: existing?.soalanTajuk || matchedQ?.bab || sa.qid,
                     tingkatan: existing?.tingkatan || matchedQ?.tingkatan || '',
@@ -1401,23 +1398,7 @@ export default function SemakanGuru({
                           <span>💬</span>
                           <span>WA</span>
                         </button>
-                        <button
-                          onClick={() => {
-                            const matchedQ = (questions || []).find(q => q.idSoalan === t.qid) || {
-                              idSoalan: t.qid,
-                              bab: t.bab || t.soalanTajuk,
-                              subjek: t.subjek,
-                              tingkatan: t.tingkatan
-                            };
-                            setSitesModalQuestion(matchedQ);
-                            setShowSitesModal(true);
-                          }}
-                          className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition"
-                          title="Jana kod embed Google Sites untuk tugasan ini"
-                        >
-                          <Code2 className="w-3 h-3" />
-                          <span>Sites</span>
-                        </button>
+
                         <a
                           href={studentUrl}
                           target="_blank"
@@ -2027,16 +2008,6 @@ export default function SemakanGuru({
       </div>
       )}
 
-      {/* MODAL INTEGRASI GOOGLE SITES */}
-      <GoogleSitesModal
-        isOpen={showSitesModal}
-        onClose={() => setShowSitesModal(false)}
-        question={sitesModalQuestion}
-        classes={classes}
-        token={token}
-        spreadsheetId={spreadsheetId}
-        user={user}
-      />
     </div>
   );
 }
