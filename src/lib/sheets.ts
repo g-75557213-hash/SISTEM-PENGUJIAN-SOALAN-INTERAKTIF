@@ -1,4 +1,7 @@
 
+import { db } from './firebase';
+import { doc, setDoc } from 'firebase/firestore';
+
 /**
  * Membina pautan terus murid yang sah dan berfungsi 100% tanpa sebarang ralat.
  * Format: https://[domain_app]/?qid=SQ-0001&mod=umum
@@ -187,8 +190,24 @@ export async function saveQuestionToSheets(
     }
   }
 
-  // Save to Firestore questions collection
+  // Save to Firestore questions collection (both client-side & server endpoint)
   if (idSoalan) {
+    try {
+      await setDoc(doc(db, "questions", idSoalan), {
+        idSoalan,
+        namaGuru: data.namaGuru || "",
+        tingkatan: data.tingkatan || "",
+        subjek: data.subjek || "",
+        bab: data.bab || "",
+        sp: data.sp || "",
+        html: data.html,
+        linkSoalan,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (clientFsErr) {
+      console.warn('Gagal simpan terus ke Firestore client SDK:', clientFsErr);
+    }
+
     try {
       await fetch('/api/save-question', {
         method: 'POST',
@@ -207,7 +226,7 @@ export async function saveQuestionToSheets(
         })
       });
     } catch (e) {
-      console.error('Gagal menyimpan soalan ke Firestore:', e);
+      console.error('Gagal menyimpan soalan ke Firestore server:', e);
     }
   }
 }

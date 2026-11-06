@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { googleSignIn, initAuth, logout } from '../lib/firebase';
+import { googleSignIn, initAuth, logout, db } from '../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { LogOut, UserCheck, BookOpen, Hash, School } from 'lucide-react';
 
 interface StudentViewProps {
@@ -88,43 +89,91 @@ export default function StudentView({
     }
   }, [user, isPublicMode, currentKelasParam]);
 
-  // Fetch question HTML with instant localStorage caching for ultra-fast loading
+  // Multi-tier question HTML fetching (Client Firestore -> Server API -> Google Sheets GViz)
   useEffect(() => {
     const fetchQuestion = async () => {
       if (!qid) return;
 
       // 1. Instant Cache Load (< 10ms)
-      let hasCache = false;
+      let foundHtml = false;
       try {
         const cached = localStorage.getItem(`cached_question_${qid}`);
-        if (cached && cached.length > 50) {
+        if (cached && cached.trim().length > 100) {
           setHtml(cached);
           setLoading(false);
-          hasCache = true;
+          foundHtml = true;
         }
       } catch (e) {}
 
-      // 2. Fetch live data in background or foreground
+      // 2. Client-side Firestore SDK lookup (Instant, untruncated 100% full HTML)
+      try {
+        const docRef = doc(db, "questions", String(qid));
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const docData = docSnap.data();
+          if (docData?.html && docData.html.trim().length > 100) {
+            setHtml(docData.html);
+            try {
+              localStorage.setItem(`cached_question_${qid}`, docData.html);
+            } catch (e) {}
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (clientFsErr) {
+        console.warn("Client Firestore fetch notice:", clientFsErr);
+      }
+
+      // 3. Server API fallback /api/question
       try {
         const url = `/api/question?qid=${qid}${spreadsheetId ? `&spreadsheetId=${spreadsheetId}` : ''}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          if (data.html) {
+          if (data.html && data.html.trim().length > 100) {
             setHtml(data.html);
             try {
               localStorage.setItem(`cached_question_${qid}`, data.html);
             } catch (e) {}
+            setLoading(false);
+            return;
           }
-        } else if (!hasCache) {
-          setHtml("Soalan tidak dijumpai.");
         }
       } catch (err) {
-        console.error(err);
-        if (!hasCache) setHtml("Gagal memuat turun soalan.");
-      } finally {
-        setLoading(false);
+        console.warn("API question fetch notice:", err);
       }
+
+      // 4. Google Sheets GViz JSON direct fallback
+      try {
+        const targetSheetId = spreadsheetId || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+        const gvizRes = await fetch(`https://docs.google.com/spreadsheets/d/${targetSheetId}/gviz/tq?tqx=out:json`);
+        if (gvizRes.ok) {
+          const text = await gvizRes.text();
+          const jsonString = text.substring(47, text.length - 2);
+          const data = JSON.parse(jsonString);
+          const rowsData = data.table.rows || [];
+          for (const row of rowsData) {
+            if (row.c && row.c[7] && row.c[7].v === qid) {
+              const sheetHtml = row.c[6] ? row.c[6].v : '';
+              if (sheetHtml && sheetHtml.trim().length > 50) {
+                setHtml(sheetHtml);
+                try {
+                  localStorage.setItem(`cached_question_${qid}`, sheetHtml);
+                } catch (e) {}
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        }
+      } catch (sheetsErr) {
+        console.warn("Sheets GViz fallback notice:", sheetsErr);
+      }
+
+      if (!foundHtml) {
+        setHtml("Soalan tidak dijumpai.");
+      }
+      setLoading(false);
     };
     fetchQuestion();
   }, [qid, spreadsheetId]);
