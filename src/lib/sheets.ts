@@ -394,17 +394,44 @@ export async function getQuestionsFromSheets(token: string, spreadsheetIdInput?:
       linkSoalan = buildDirectLink(idSoalan);
     }
 
-    return {
+    // Bina fullHtml daripada Lajur G (index 6) dan sebarang serpihan extra HTML dari Lajur J onwards (index 9)
+    let fullHtml = row[6] || '';
+    if (row.length > 9) {
+      for (let i = 9; i < row.length; i++) {
+        if (row[i]) fullHtml += row[i];
+      }
+    }
+
+    const questionItem: SoalanData = {
       timestamp: row[0] || '',
       namaGuru: row[1] || '',
       tingkatan: row[2] || '',
       subjek: row[3] || '',
       bab: row[4] || '',
       sp: row[5] || '',
-      html: row[6] || '',
+      html: fullHtml,
       idSoalan,
       linkSoalan
     };
+
+    // Auto-sinkron ke Firestore client-side SDK dalam latar belakang
+    if (idSoalan && fullHtml) {
+      setDoc(doc(db, "questions", idSoalan), {
+        idSoalan,
+        namaGuru: questionItem.namaGuru,
+        tingkatan: questionItem.tingkatan,
+        subjek: questionItem.subjek,
+        bab: questionItem.bab,
+        sp: questionItem.sp,
+        html: fullHtml,
+        linkSoalan,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(err => {
+        console.warn(`[Auto-Sync] Ralat simpan ${idSoalan} ke Firestore:`, err);
+      });
+    }
+
+    return questionItem;
   }).reverse(); // Reverse so newest is first
 }
 
@@ -419,8 +446,8 @@ export async function convertAllSheet1LinksToDirect(
   const spreadsheetId = spreadsheetIdInput || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
   const sheetName = await getFirstSheetName(token, spreadsheetId);
 
-  // 1. Ambil data sedia ada dari Sheet1 (A:I)
-  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:I`, {
+  // 1. Ambil data sedia ada dari Sheet1 (A:Z)
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:Z`, {
     headers: { Authorization: `Bearer ${token}` }
   });
 
@@ -444,7 +471,7 @@ export async function convertAllSheet1LinksToDirect(
   const startIdx = hasHeader ? 1 : 0;
 
   const linksColValues: string[][] = [];
-  const updatedList: { id: string; link: string }[] = [];
+  const updatedList: { id: string; link: string; html: string; guru: string; tingkatan: string; subjek: string; bab: string; sp: string }[] = [];
   let updatedCount = 0;
 
   for (let i = startIdx; i < rows.length; i++) {
@@ -460,8 +487,39 @@ export async function convertAllSheet1LinksToDirect(
       updatedCount++;
     }
 
+    let fullHtml = row[6] || '';
+    if (row.length > 9) {
+      for (let j = 9; j < row.length; j++) {
+        if (row[j]) fullHtml += row[j];
+      }
+    }
+
     linksColValues.push([newDirectLink]);
-    updatedList.push({ id: currentId, link: newDirectLink });
+    updatedList.push({
+      id: currentId,
+      link: newDirectLink,
+      html: fullHtml,
+      guru: row[1] || '',
+      tingkatan: row[2] || '',
+      subjek: row[3] || '',
+      bab: row[4] || '',
+      sp: row[5] || ''
+    });
+
+    // Auto sync to Firestore
+    if (currentId && fullHtml) {
+      setDoc(doc(db, "questions", currentId), {
+        idSoalan: currentId,
+        namaGuru: row[1] || '',
+        tingkatan: row[2] || '',
+        subjek: row[3] || '',
+        bab: row[4] || '',
+        sp: row[5] || '',
+        html: fullHtml,
+        linkSoalan: newDirectLink,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
   }
 
   // 2. Tulis balik semua Direct Link ke Lajur I dalam Sheet1
@@ -498,7 +556,16 @@ export async function convertAllSheet1LinksToDirect(
         fetch('/api/update-question-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idSoalan: item.id, linkSoalan: item.link })
+          body: JSON.stringify({
+            idSoalan: item.id,
+            linkSoalan: item.link,
+            html: item.html,
+            namaGuru: item.guru,
+            tingkatan: item.tingkatan,
+            subjek: item.subjek,
+            bab: item.bab,
+            sp: item.sp
+          })
         }).catch(() => {})
       )
     );

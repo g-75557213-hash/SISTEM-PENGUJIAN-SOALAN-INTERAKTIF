@@ -757,21 +757,28 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
       const { qid, spreadsheetId } = req.query;
       if (!qid) return res.status(400).json({ error: "Missing qid" });
 
+      const rawQid = String(qid).trim();
+      const cleanQid = rawQid.toUpperCase();
       const sheetId = spreadsheetId ? String(spreadsheetId) : "1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A";
 
       let linkSoalan = "";
       let fallbackHtml = "";
 
       // 1. First, check Firestore cache
-      const docRef = db.collection("questions").doc(String(qid));
-      const docSnap = await docRef.get();
+      let docRef = db.collection("questions").doc(cleanQid);
+      let docSnap = await docRef.get();
+      if (!docSnap.exists && rawQid !== cleanQid) {
+        docRef = db.collection("questions").doc(rawQid);
+        docSnap = await docRef.get();
+      }
+
       if (docSnap.exists) {
         const docData = docSnap.data();
         linkSoalan = docData?.linkSoalan || "";
         fallbackHtml = docData?.html || "";
       }
 
-      // 2. Fetch the latest row from Google Sheets to get the live Column I URL created by Apps Script
+      // 2. Fetch the latest row from Google Sheets to get HTML and Column I URL
       try {
         const response = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`);
         if (response.ok) {
@@ -779,18 +786,23 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
           const jsonString = text.substring(47, text.length - 2);
           const data = JSON.parse(jsonString);
           
-          const rowsData = data.table.rows;
+          const rowsData = data.table.rows || [];
           for (const row of rowsData) {
             // Column H (index 7) is ID Soalan
-            if (row.c && row.c[7] && row.c[7].v === qid) {
-              // Column I (index 8) is the Link Soalan created by Apps Script
-              const sheetLink = row.c[8] ? row.c[8].v : "";
+            if (row.c && row.c[7] && row.c[7].v && String(row.c[7].v).trim().toUpperCase() === cleanQid) {
+              const sheetLink = row.c[8] ? String(row.c[8].v) : "";
               if (sheetLink && sheetLink.startsWith("http")) {
                 linkSoalan = sheetLink;
               }
               // Column G (index 6) is HTML
-              if (row.c[6] && row.c[6].v) {
-                fallbackHtml = row.c[6].v;
+              let gHtml = row.c[6] && row.c[6].v ? String(row.c[6].v) : "";
+              if (row.c.length > 9) {
+                for (let j = 9; j < row.c.length; j++) {
+                  if (row.c[j] && row.c[j].v) gHtml += String(row.c[j].v);
+                }
+              }
+              if (gHtml) {
+                fallbackHtml = gHtml;
               }
               break;
             }
@@ -800,41 +812,29 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         console.error("Error fetching latest link from Google Sheets inside /api/question:", err);
       }
 
-      // 3. If we already have the full HTML from Firestore (which has no 50k character limit),
-      // we prioritize returning it over the Google Apps Script version to prevent truncation issues.
-      if (fallbackHtml && fallbackHtml.trim().length > 100) {
-         console.log(`Menggunakan cache Firestore yang lengkap untuk soalan ${qid}`);
-         return res.json({ html: fallbackHtml });
+      // 3. Return full HTML
+      if (fallbackHtml && fallbackHtml.trim().length > 20) {
+        return res.json({ html: fallbackHtml });
       }
 
       // 4. Read/fetch the URL created by Apps Script on Column I ONLY if it is a Google Apps Script URL.
-      // If it is our React App direct URL, we do not fetch it; instead, we return the direct question HTML from fallbackHtml.
       if (linkSoalan && linkSoalan.startsWith("http") && linkSoalan.includes("script.google.com")) {
         try {
-          console.log(`Membaca URL dari Column I: ${linkSoalan}`);
           const htmlResponse = await fetch(linkSoalan);
           if (htmlResponse.ok) {
             const htmlContent = await htmlResponse.text();
             
-            // Check if the returned content is a Google Login page (redirected due to unauthenticated server requests)
             const isGoogleLogin = htmlContent.includes("accounts.google.com") || 
                                  htmlContent.includes("Service Login") || 
                                  htmlContent.includes("Sign in - Google Accounts");
             
-            if (htmlContent && htmlContent.trim().length > 100 && !isGoogleLogin) {
+            if (htmlContent && htmlContent.trim().length > 50 && !isGoogleLogin) {
               return res.json({ html: htmlContent });
-            } else if (isGoogleLogin) {
-              console.warn("Mendapat halaman log masuk Google daripada URL Apps Script. Menggunakan salinan sandaran daripada Firestore.");
             }
           }
         } catch (fetchErr) {
           console.error(`Gagal membaca HTML dari URL Column I: ${linkSoalan}`, fetchErr);
         }
-      }
-
-      // 4. Fallback to cached HTML if Column I link fetch was empty or failed
-      if (fallbackHtml) {
-        return res.json({ html: fallbackHtml });
       }
 
       res.status(404).json({ error: "Question not found" });

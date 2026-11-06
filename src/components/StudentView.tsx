@@ -92,12 +92,49 @@ export default function StudentView({
   // Multi-tier question HTML fetching (Client Firestore -> Server API -> Google Sheets GViz)
   useEffect(() => {
     const fetchQuestion = async () => {
-      if (!qid) return;
+      let activeQid = (qid || '').trim();
+
+      // If qid is missing but kod is present, try to find qid from /api/tugasan-umum or local storage
+      if (!activeQid && currentKod) {
+        try {
+          const stored = localStorage.getItem('sistem_tugasan_umum_list');
+          if (stored) {
+            const list: any[] = JSON.parse(stored);
+            const found = list.find((item: any) => (item.kod || '').toUpperCase() === currentKod.toUpperCase());
+            if (found && found.qid) {
+              activeQid = found.qid;
+            }
+          }
+        } catch (e) {}
+
+        if (!activeQid) {
+          try {
+            const res = await fetch(`/api/tugasan-umum?kod=${encodeURIComponent(currentKod)}`);
+            if (res.ok) {
+              const list = await res.json();
+              if (Array.isArray(list) && list.length > 0) {
+                const matched = list.find((item: any) => (item.kod || '').toUpperCase() === currentKod.toUpperCase()) || list[0];
+                if (matched && matched.qid) {
+                  activeQid = matched.qid;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Notice fetching qid from kod:", e);
+          }
+        }
+      }
+
+      if (!activeQid) {
+        setHtml("Soalan tidak dijumpai.");
+        setLoading(false);
+        return;
+      }
 
       // 1. Instant Cache Load (< 10ms)
       let foundHtml = false;
       try {
-        const cached = localStorage.getItem(`cached_question_${qid}`);
+        const cached = localStorage.getItem(`cached_question_${activeQid}`) || localStorage.getItem(`cached_question_${activeQid.toUpperCase()}`);
         if (cached && cached.trim().length > 100) {
           setHtml(cached);
           setLoading(false);
@@ -107,14 +144,17 @@ export default function StudentView({
 
       // 2. Client-side Firestore SDK lookup (Instant, untruncated 100% full HTML)
       try {
-        const docRef = doc(db, "questions", String(qid));
-        const docSnap = await getDoc(docRef);
+        const docRef = doc(db, "questions", String(activeQid));
+        let docSnap = await getDoc(docRef);
+        if (!docSnap.exists() && activeQid !== activeQid.toUpperCase()) {
+          docSnap = await getDoc(doc(db, "questions", activeQid.toUpperCase()));
+        }
         if (docSnap.exists()) {
           const docData = docSnap.data();
           if (docData?.html && docData.html.trim().length > 100) {
             setHtml(docData.html);
             try {
-              localStorage.setItem(`cached_question_${qid}`, docData.html);
+              localStorage.setItem(`cached_question_${activeQid}`, docData.html);
             } catch (e) {}
             setLoading(false);
             return;
@@ -126,14 +166,14 @@ export default function StudentView({
 
       // 3. Server API fallback /api/question
       try {
-        const url = `/api/question?qid=${qid}${spreadsheetId ? `&spreadsheetId=${spreadsheetId}` : ''}`;
+        const url = `/api/question?qid=${encodeURIComponent(activeQid)}${spreadsheetId ? `&spreadsheetId=${spreadsheetId}` : ''}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           if (data.html && data.html.trim().length > 100) {
             setHtml(data.html);
             try {
-              localStorage.setItem(`cached_question_${qid}`, data.html);
+              localStorage.setItem(`cached_question_${activeQid}`, data.html);
             } catch (e) {}
             setLoading(false);
             return;
@@ -153,12 +193,17 @@ export default function StudentView({
           const data = JSON.parse(jsonString);
           const rowsData = data.table.rows || [];
           for (const row of rowsData) {
-            if (row.c && row.c[7] && row.c[7].v === qid) {
-              const sheetHtml = row.c[6] ? row.c[6].v : '';
+            if (row.c && row.c[7] && row.c[7].v && String(row.c[7].v).trim().toUpperCase() === activeQid.trim().toUpperCase()) {
+              let sheetHtml = row.c[6] ? String(row.c[6].v) : '';
+              if (row.c.length > 9) {
+                for (let i = 9; i < row.c.length; i++) {
+                  if (row.c[i] && row.c[i].v) sheetHtml += String(row.c[i].v);
+                }
+              }
               if (sheetHtml && sheetHtml.trim().length > 50) {
                 setHtml(sheetHtml);
                 try {
-                  localStorage.setItem(`cached_question_${qid}`, sheetHtml);
+                  localStorage.setItem(`cached_question_${activeQid}`, sheetHtml);
                 } catch (e) {}
                 setLoading(false);
                 return;
@@ -176,7 +221,7 @@ export default function StudentView({
       setLoading(false);
     };
     fetchQuestion();
-  }, [qid, spreadsheetId]);
+  }, [qid, currentKod, spreadsheetId]);
 
   const handleSignIn = async () => {
     try {
@@ -326,7 +371,7 @@ export default function StudentView({
     }
 
     // Public Mode Started: Inject script and render iframe
-    if (!html || html.startsWith("S") || html.startsWith("G")) {
+    if (!html || html === "Soalan tidak dijumpai." || html.startsWith("Gagal") || html.trim().length < 30) {
       return (
         <div className="h-screen w-screen flex items-center justify-center bg-slate-50 p-4">
           <div className="text-center max-w-md">
@@ -567,7 +612,7 @@ export default function StudentView({
     );
   }
 
-  if (!html || html.startsWith("S") || html.startsWith("G")) {
+  if (!html || html === "Soalan tidak dijumpai." || html.startsWith("Gagal") || html.trim().length < 30) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
