@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import {
@@ -16,6 +17,9 @@ import {
   serverTimestamp,
   QueryConstraint
 } from "firebase/firestore";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Read Firebase config to get dynamic projectId and firestoreDatabaseId
 let firebaseConfig: any = {
@@ -53,13 +57,20 @@ try {
 // In-memory fallback stores for high resilience (works in serverless, offline, or DB timeouts)
 const inMemoryTugasanUmum = new Map<string, any>();
 const inMemorySubmissions = new Map<string, any>();
+const inMemoryClassroomRosters = new Map<string, any>();
 
 const FieldValue = {
   serverTimestamp: () => "SERVER_TIMESTAMP_PLACEHOLDER"
 };
 
 class DocRef {
-  constructor(private colName: string, private docId: string) {}
+  colName: string;
+  docId: string;
+
+  constructor(colName: string, docId: string) {
+    this.colName = colName;
+    this.docId = docId;
+  }
 
   async set(data: any, options?: { merge?: boolean }) {
     if (!firestoreInstance) return null;
@@ -118,9 +129,12 @@ class DocRef {
 }
 
 class QueryAdapter {
-  private constraints: QueryConstraint[] = [];
+  constraints: QueryConstraint[] = [];
+  colName: string;
 
-  constructor(private colName: string) {}
+  constructor(colName: string) {
+    this.colName = colName;
+  }
 
   where(field: string, op: any, val: any) {
     this.constraints.push(where(field, op, val));
@@ -172,7 +186,7 @@ const db = new DbAdapter();
 
 
 export const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json({ limit: '50mb' })); // Allow large payloads for base64 certificates
 
@@ -242,10 +256,151 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
+  // Classroom Roster Cache Endpoints
+  app.post("/api/classroom-roster", async (req, res) => {
+    try {
+      const { courseId, courseName, students } = req.body;
+      if (!courseId || !Array.isArray(students)) {
+        return res.status(400).json({ error: "Missing required fields (courseId, students)" });
+      }
+
+      const rosterData = {
+        courseId: String(courseId).trim(),
+        courseName: courseName ? String(courseName).trim() : '',
+        students: students.map((s: any) => ({
+          userId: s.userId || s.id || '',
+          fullName: (s.profile?.name?.fullName || s.fullName || s.name || '').trim().toUpperCase(),
+          email: (s.profile?.emailAddress || s.email || '').trim().toLowerCase(),
+          photoUrl: s.profile?.photoUrl || s.photoUrl || ''
+        })),
+        updatedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+      };
+
+      inMemoryClassroomRosters.set(rosterData.courseId, rosterData);
+
+      try {
+        const rosterRef = db.collection('classroom_rosters').doc(rosterData.courseId);
+        await rosterRef.set({
+          ...rosterData,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (dbErr) {
+        console.warn("Firestore save notice for classroom_roster:", dbErr);
+      }
+
+      return res.json({ success: true, count: rosterData.students.length });
+    } catch (error) {
+      console.error("Error caching classroom roster:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/classroom-roster", async (req, res) => {
+    try {
+      const { courseId } = req.query;
+      if (!courseId) {
+        return res.status(400).json({ error: "Missing courseId" });
+      }
+
+      const cleanCourseId = String(courseId).trim();
+      let roster = inMemoryClassroomRosters.get(cleanCourseId);
+
+      if (!roster) {
+        try {
+          const docSnap = await db.collection('classroom_rosters').doc(cleanCourseId).get();
+          if (docSnap.exists && docSnap.data()) {
+            roster = docSnap.data();
+            inMemoryClassroomRosters.set(cleanCourseId, roster);
+          }
+        } catch (dbErr) {
+          console.warn("Firestore fetch notice for classroom_roster:", dbErr);
+        }
+      }
+
+      if (!roster) {
+        return res.status(404).json({ error: "Roster not found for course", students: [] });
+      }
+
+      return res.json(roster);
+    } catch (error) {
+      console.error("Error getting classroom roster:", error);
+      res.status(500).json({ error: "Internal server error", students: [] });
+    }
+  });
+
   app.post("/api/submit-score", async (req, res) => {
     try {
-      const { qid, status, markah, email, nama, sijilBase64, isUmum, kod, kelas } = req.body;
+      const { 
+        qid, 
+        status, 
+        markah, 
+        email, 
+        nama, 
+        sijilBase64, 
+        isUmum, 
+        kod, 
+        kelas,
+        courseId,
+        courseWorkId,
+        rawTypedName,
+        matchedClassroomName,
+        matchedStudentId,
+        verificationStatus,
+        possibleMatches,
+        mod
+      } = req.body;
       
+      const isGCMode = mod === 'gc' || !!courseId;
+
+      // For Google Classroom submissions
+      if (isGCMode) {
+        const studentName = String(matchedClassroomName || nama || rawTypedName || 'PELAJAR').trim().toUpperCase();
+        const safeStudentId = matchedStudentId || encodeURIComponent(studentName);
+        const docId = `gc_${courseId || 'GC'}_${safeStudentId}_${qid || 'QUIZ'}`;
+
+        const dataToSave = {
+          id: docId,
+          qid: qid || '',
+          kod: kod ? String(kod).trim().toUpperCase() : '',
+          kelas: kelas || '',
+          courseId: courseId ? String(courseId).trim() : '',
+          courseWorkId: courseWorkId ? String(courseWorkId).trim() : '',
+          nama: studentName,
+          rawTypedName: rawTypedName ? String(rawTypedName).trim().toUpperCase() : studentName,
+          matchedClassroomName: matchedClassroomName ? String(matchedClassroomName).trim().toUpperCase() : studentName,
+          matchedStudentId: matchedStudentId || '',
+          email: email ? String(email).trim().toLowerCase() : '',
+          status: status || 'Selesai Menjawab',
+          markah: markah !== undefined && markah !== null ? Number(markah) : null,
+          verificationStatus: verificationStatus || (matchedClassroomName ? 'verified' : 'pending_teacher_approval'),
+          possibleMatches: Array.isArray(possibleMatches) ? possibleMatches : [],
+          sijilBase64: sijilBase64 || null,
+          isUmum: false,
+          isClassroom: true,
+          source: 'Google Classroom',
+          updatedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+        };
+
+        inMemorySubmissions.set(docId, dataToSave);
+
+        try {
+          const submissionRef = db.collection('submissions').doc(docId);
+          await submissionRef.set({
+            ...dataToSave,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        } catch (dbErr) {
+          console.warn("Firestore save notice for GC submission (saved to memory):", dbErr);
+        }
+
+        return res.json({ 
+          success: true, 
+          message: "Markah Google Classroom berjaya disimpan",
+          verificationStatus: dataToSave.verificationStatus,
+          submissionId: docId
+        });
+      }
+
       // For Tugasan Umum (tanpa GC), email is optional, but nama and (qid or kod) are required
       if (isUmum || kod) {
         if (!nama || (!qid && !kod)) {
@@ -256,6 +411,7 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         const docId = `umum_${safeKod}_${safeNama}`;
 
         const dataToSave = {
+          id: docId,
           qid: qid || '',
           kod: kod ? String(kod).trim().toUpperCase() : '',
           kelas: kelas || '',
@@ -288,9 +444,9 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         return res.status(400).json({ error: "Missing required fields (qid, email)" });
       }
 
-      const submissionRef = db.collection('submissions').doc(`${qid}_${email}`);
-      
-      await submissionRef.set({
+      const docId = `${qid}_${email}`;
+      const dataToSave = {
+        id: docId,
         qid,
         status: status || 'Selesai',
         markah: markah !== undefined && markah !== null ? Number(markah) : null,
@@ -298,12 +454,122 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         nama: nama || '',
         sijilBase64: sijilBase64 || null,
         isUmum: false,
-        updatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
+        verificationStatus: 'verified',
+        updatedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+      };
+
+      inMemorySubmissions.set(docId, dataToSave);
+
+      try {
+        const submissionRef = db.collection('submissions').doc(docId);
+        await submissionRef.set({
+          ...dataToSave,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (dbErr) {
+        console.warn("Firestore save notice for submission:", dbErr);
+      }
 
       res.json({ success: true, message: "Markah berjaya disimpan" });
     } catch (error) {
       console.error("Error submitting score:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Endpoints to manage student verification by teachers
+  app.get("/api/pending-verifications", async (req, res) => {
+    try {
+      const { courseId, qid } = req.query;
+      const pendingMap = new Map<string, any>();
+
+      inMemorySubmissions.forEach((val, key) => {
+        if (val.verificationStatus === 'pending_teacher_approval') {
+          let match = true;
+          if (courseId && val.courseId && val.courseId !== courseId) match = false;
+          if (qid && val.qid && val.qid !== qid) match = false;
+          if (match) pendingMap.set(key, { ...val, id: key });
+        }
+      });
+
+      try {
+        let queryRef: any = db.collection("submissions").where("verificationStatus", "==", "pending_teacher_approval");
+        if (courseId) {
+          queryRef = queryRef.where("courseId", "==", String(courseId));
+        }
+        const snapshot = await queryRef.get();
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          if (data) {
+            pendingMap.set(doc.id, { ...data, id: doc.id });
+          }
+        });
+      } catch (dbErr) {
+        console.warn("Firestore fetch notice for pending verifications:", dbErr);
+      }
+
+      res.json(Array.from(pendingMap.values()));
+    } catch (error) {
+      console.error("Error getting pending verifications:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/verify-student-submission", async (req, res) => {
+    try {
+      const { submissionId, action, confirmedStudent } = req.body;
+      if (!submissionId || !action) {
+        return res.status(400).json({ error: "Missing required fields (submissionId, action)" });
+      }
+
+      if (action === 'delete') {
+        // Discard / Delete submission entirely from system
+        inMemorySubmissions.delete(submissionId);
+        try {
+          await db.collection("submissions").doc(submissionId).delete();
+        } catch (dbErr) {
+          console.warn("Firestore delete submission notice:", dbErr);
+        }
+        return res.json({ success: true, message: "Tugasan murid berjaya dibuang dari sistem." });
+      }
+
+      if (action === 'confirm') {
+        if (!confirmedStudent || !confirmedStudent.fullName) {
+          return res.status(400).json({ error: "Missing confirmedStudent details" });
+        }
+
+        const existing = inMemorySubmissions.get(submissionId) || {};
+        const updated = {
+          ...existing,
+          verificationStatus: 'verified',
+          nama: String(confirmedStudent.fullName).trim().toUpperCase(),
+          matchedClassroomName: String(confirmedStudent.fullName).trim().toUpperCase(),
+          matchedStudentId: confirmedStudent.userId || existing.matchedStudentId || '',
+          email: (confirmedStudent.email || existing.email || '').trim().toLowerCase(),
+          updatedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+        };
+
+        inMemorySubmissions.set(submissionId, updated);
+
+        try {
+          await db.collection("submissions").doc(submissionId).set({
+            ...updated,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        } catch (dbErr) {
+          console.warn("Firestore update submission notice:", dbErr);
+        }
+
+        return res.json({ 
+          success: true, 
+          message: "Murid berjaya disahkan dan didaftarkan sebagai nama penuh rasmi Google Classroom.",
+          updated
+        });
+      }
+
+      return res.status(400).json({ error: "Invalid action" });
+    } catch (error) {
+      console.error("Error verifying student submission:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -874,8 +1140,13 @@ async function setupViteAndStart() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     if (!process.env.VERCEL) {
-      app.get('*all', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+      app.get('*', (req, res) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(200).send("Applet is running.");
+        }
       });
     }
   }

@@ -3,7 +3,7 @@ import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy
 import { GCClass } from '../lib/classroom';
 import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet, buildDirectLink, convertAllSheet1LinksToDirect } from '../lib/sheets';
 import ColorfulSelect from './ColorfulSelect';
-import { createAssignment, deleteAssignment } from '../lib/classroom';
+import { createAssignment, deleteAssignment, getStudents } from '../lib/classroom';
 import { logout } from '../lib/firebase';
 import WaygroundSection from './WaygroundSection';
 
@@ -329,6 +329,24 @@ export default function BankSoalan({
         const matchedClass = classes.find(c => c.id === courseId);
         const className = matchedClass ? matchedClass.name : courseId;
         
+        // Cache class student roster for student link resolution
+        try {
+          const classStudents = await getStudents(token, courseId);
+          if (Array.isArray(classStudents) && classStudents.length > 0) {
+            fetch('/api/classroom-roster', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                courseId,
+                courseName: className,
+                students: classStudents
+              })
+            }).catch(e => console.warn("Notice caching roster to server:", e));
+          }
+        } catch (e) {
+          console.warn("Could not fetch students for roster cache:", e);
+        }
+
         let linkToUse = '';
         
         // 1. Fill sheet "TUGASAN" first
@@ -356,21 +374,33 @@ export default function BankSoalan({
           }
         }
         
-        // Fallback if writing failed or link wasn't generated - gunakan Direct Link
+        // Gunakan Google Classroom Interactive Direct Link yang sah & boleh dibuka murid
         if (!linkToUse || linkToUse.includes('script.google.com') || linkToUse.includes('storage.googleapis.com')) {
           linkToUse = buildDirectLink(sendQ.idSoalan, {
             kod: uniqueCode,
             kelas: className,
-            tugasan: sendForm.title
+            tugasan: sendForm.title,
+            courseId,
+            mod: 'gc'
           });
         }
           
         // 3. Post to Classroom
         const assignment = await createAssignment(token, courseId, sendForm.title, sendForm.description, linkToUse, { maxPoints: sendForm.points });
         
+        // Kemaskini dengan pautan muktamad yang merangkumi courseWorkId
+        const finalLink = buildDirectLink(sendQ.idSoalan, {
+          kod: uniqueCode,
+          kelas: className,
+          tugasan: sendForm.title,
+          courseId,
+          courseWorkId: assignment.id,
+          mod: 'gc'
+        });
+
         // 4. Update the "TUGASAN" sheet
         if (rowNum) {
-          await updateTugasanStatus(token, spreadsheetId, rowNum, "Telah Di-Post", courseId, assignment.id, linkToUse);
+          await updateTugasanStatus(token, spreadsheetId, rowNum, "Telah Di-Post", courseId, assignment.id, finalLink);
         }
         
         assignmentsCreated.push({

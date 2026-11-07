@@ -53,6 +53,134 @@ export default function SemakanGuru({
   const [deletingUmumKod, setDeletingUmumKod] = useState<string | null>(null);
   const [deletingScoreKey, setDeletingScoreKey] = useState<string | null>(null);
 
+  // Pending verification states for short-names and teacher confirmations
+  const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
+  const [activeResolvingSubmission, setActiveResolvingSubmission] = useState<any | null>(null);
+  const [selectedCandidateStudent, setSelectedCandidateStudent] = useState<any | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const loadPendingVerifications = async (classId?: string) => {
+    try {
+      const cid = classId || selectedClass;
+      const url = cid ? `/api/pending-verifications?courseId=${encodeURIComponent(cid)}` : '/api/pending-verifications';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setPendingVerifications(data);
+        }
+      }
+    } catch (e) {
+      console.warn("Notice loading pending verifications:", e);
+    }
+  };
+
+  const handleConfirmStudent = async (sub: any, chosenStudent: any) => {
+    if (!sub || !chosenStudent) return;
+    setIsVerifying(true);
+    try {
+      const res = await fetch('/api/verify-student-submission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: sub.id,
+          action: 'confirm',
+          confirmedStudent: {
+            userId: chosenStudent.userId,
+            fullName: chosenStudent.fullName,
+            email: chosenStudent.email
+          }
+        })
+      });
+
+      if (res.ok) {
+        if (token && spreadsheetId) {
+          try {
+            const { syncSubmissionsToSheets } = await import('../lib/sheets');
+            await syncSubmissionsToSheets(token, [{
+              qid: sub.qid || currentTugasanMatch.qid,
+              status: 'Selesai Menjawab',
+              markah: sub.markah,
+              email: chosenStudent.email,
+              nama: chosenStudent.fullName,
+              kelas: classes.find(c => c.id === selectedClass)?.name || sub.kelas || '',
+              tugasan: assignments.find(a => a.id === selectedAssignment)?.title || '',
+              kodUnik: sub.kod || currentTugasanMatch.kodUnik
+            }], spreadsheetId);
+          } catch (e) {
+            console.warn("Notice saving confirmed student mark to sheets:", e);
+          }
+        }
+
+        alert(`✓ Berjaya mengesahkan ${sub.rawTypedName || sub.nama} sebagai ${chosenStudent.fullName}! Markah kini sedia untuk disegerakan ke Google Classroom.`);
+        setActiveResolvingSubmission(null);
+        setSelectedCandidateStudent(null);
+        await loadPendingVerifications(selectedClass);
+        if (selectedClass && selectedAssignment && token) {
+          const { getMarkahMurid } = await import('../lib/sheets');
+          const [updatedSubs, updatedMarks] = await Promise.all([
+            getStudentSubmissions(token, selectedClass, selectedAssignment),
+            getMarkahMurid(token, spreadsheetId).catch(() => [])
+          ]);
+          setSubmissions(updatedSubs);
+          setOurSubmissions(updatedMarks);
+        }
+      } else {
+        alert("Gagal mengesahkan murid.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat pengesahan murid: " + err.message);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleDeleteSubmission = async (sub: any) => {
+    if (!sub) return;
+    if (!confirm(`Adakah anda pasti mahu membuang terus tugasan bagi pelajar "${sub.rawTypedName || sub.nama}" dari sistem?`)) {
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const res = await fetch('/api/verify-student-submission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: sub.id,
+          action: 'delete'
+        })
+      });
+
+      if (res.ok) {
+        if (token && spreadsheetId) {
+          try {
+            const { deleteSingleMarkahMuridRowFromSheet } = await import('../lib/sheets');
+            await deleteSingleMarkahMuridRowFromSheet(token, spreadsheetId, {
+              nama: sub.rawTypedName || sub.nama,
+              kod: sub.kod,
+              qid: sub.qid
+            });
+          } catch (e) {
+            console.warn("Notice deleting mark row from sheet:", e);
+          }
+        }
+
+        alert(`Tugasan bagi "${sub.rawTypedName || sub.nama}" telah berjaya dibuang dari sistem.`);
+        setActiveResolvingSubmission(null);
+        setSelectedCandidateStudent(null);
+        await loadPendingVerifications(selectedClass);
+      } else {
+        alert("Gagal membuang tugasan murid.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat membuang tugasan: " + err.message);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const loadTugasanUmumData = async () => {
     try {
       setLoadingUmum(true);
@@ -597,6 +725,20 @@ export default function SemakanGuru({
         setSubmissions([]);
         setOurSubmissions([]);
         setWaygroundData([]);
+
+        // Cache roster for student links
+        if (Array.isArray(stds) && stds.length > 0) {
+          fetch('/api/classroom-roster', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              courseId: selectedClass,
+              courseName: classes.find(c => c.id === selectedClass)?.name || '',
+              students: stds
+            })
+          }).catch(() => {});
+        }
+        loadPendingVerifications(selectedClass);
       }).finally(() => setLoading(false));
     } else {
       setAssignments([]);
@@ -606,6 +748,7 @@ export default function SemakanGuru({
       setSubmissions([]);
       setOurSubmissions([]);
       setWaygroundData([]);
+      setPendingVerifications([]);
     }
   }, [selectedClass, token]);
 
@@ -1648,6 +1791,78 @@ export default function SemakanGuru({
                   </div>
                 )}
 
+                {/* PERLU PENGESAHAN GURU SECTION */}
+                {pendingVerifications.length > 0 && (
+                  <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-xs">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-amber-200 text-amber-900 flex items-center justify-center text-xs font-bold">
+                          ⚠️
+                        </span>
+                        <span className="text-xs font-black text-amber-950 uppercase tracking-wide">
+                          Perlu Pengesahan Guru ({pendingVerifications.length} Murid)
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-lg border border-amber-200">
+                        Nama Pendek / Padanan Hampir
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-amber-800 mb-3 leading-relaxed">
+                      Murid berikut telah menghantar jawapan menggunakan nama pendek. Sila sahkan padanan dengan rekod Google Classroom atau buang tugasan murid jika tidak berkaitan.
+                    </p>
+
+                    <div className="space-y-2">
+                      {pendingVerifications.map((item, idx) => (
+                        <div 
+                          key={item.id || idx} 
+                          className="bg-white border border-amber-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-amber-400 transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-slate-800">
+                                {item.rawTypedName || item.nama}
+                              </span>
+                              <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                Markah: {item.markah !== undefined && item.markah !== null ? `${item.markah}%` : '-'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
+                              <span>Padanan cadangan: <strong className="text-slate-700">{item.matchedClassroomName || 'Tiada'}</strong></span>
+                              {item.possibleMatches?.length > 1 && (
+                                <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                  {item.possibleMatches.length} nama serupa
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                            <button
+                              onClick={() => {
+                                setActiveResolvingSubmission(item);
+                                const matchInRoster = item.possibleMatches?.[0] || students[0] || null;
+                                setSelectedCandidateStudent(matchInRoster);
+                              }}
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              <span>Sahkan Murid</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteSubmission(item)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-xl transition border border-red-200 cursor-pointer"
+                              title="Buang terus tugasan pelajar ini dari sistem"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* SECTION 1: Classroom Students */}
                 <div>
                   <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 flex items-center justify-between">
@@ -2009,6 +2224,153 @@ export default function SemakanGuru({
         </div>
 
       </div>
+      )}
+
+      {/* RESOLVER MODAL FOR STUDENT MATCHING & APPROVAL */}
+      {activeResolvingSubmission && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                <span>👤</span> Pengesahan Padanan Murid Google Classroom
+              </h3>
+              <button
+                onClick={() => {
+                  setActiveResolvingSubmission(null);
+                  setSelectedCandidateStudent(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs text-slate-700 space-y-1.5">
+                <div>Nama Ditaip Murid: <strong className="text-amber-950 text-sm font-black">{activeResolvingSubmission.rawTypedName || activeResolvingSubmission.nama}</strong></div>
+                <div>Markah Diperoleh: <strong className="text-emerald-700 font-bold">{activeResolvingSubmission.markah !== undefined && activeResolvingSubmission.markah !== null ? `${activeResolvingSubmission.markah}%` : '-'}</strong></div>
+                {activeResolvingSubmission.email && (
+                  <div>E-mel terkesan: <span className="font-mono text-slate-600 font-bold">{activeResolvingSubmission.email}</span></div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2.5">
+                  Pilih Pelajar Google Classroom Yang Betul:
+                </label>
+
+                <div className="space-y-2">
+                  {/* Cadangan Padanan Hampir */}
+                  {activeResolvingSubmission.possibleMatches && activeResolvingSubmission.possibleMatches.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Cadangan Padanan Nama Hampir:
+                      </div>
+                      {activeResolvingSubmission.possibleMatches.map((cand: any, cIdx: number) => {
+                        const isSelected = selectedCandidateStudent?.userId === cand.userId || selectedCandidateStudent?.fullName === cand.fullName;
+                        return (
+                          <label
+                            key={`cand-${cIdx}`}
+                            className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
+                              isSelected 
+                                ? 'border-blue-500 bg-blue-50/70 shadow-xs' 
+                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <input
+                                type="radio"
+                                name="candidateRadio"
+                                checked={isSelected}
+                                onChange={() => setSelectedCandidateStudent(cand)}
+                                className="text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <div className="font-bold text-xs text-slate-900">{cand.fullName}</div>
+                                <div className="text-[10px] font-mono text-slate-400">{cand.email || 'Tiada e-mel'}</div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200">
+                              Cadangan #{cIdx + 1}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Dropdown semua murid kelas */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                      Atau Pilih Daripada Keseluruhan Pelajar Kelas:
+                    </div>
+                    <select
+                      value={selectedCandidateStudent?.userId || ''}
+                      onChange={(e) => {
+                        const s = students.find(st => st.userId === e.target.value);
+                        if (s) {
+                          setSelectedCandidateStudent({
+                            userId: s.userId,
+                            fullName: s.profile?.name?.fullName || '',
+                            email: s.profile?.emailAddress || ''
+                          });
+                        }
+                      }}
+                      className="w-full text-xs font-semibold p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- Pilih Pelajar Dari Senarai Kelas --</option>
+                      {students.map(s => (
+                        <option key={s.userId} value={s.userId}>
+                          {s.profile?.name?.fullName} ({s.profile?.emailAddress || 'Tiada e-mel'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <button
+                type="button"
+                disabled={isVerifying}
+                onClick={() => handleDeleteSubmission(activeResolvingSubmission)}
+                className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-red-200"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Buang Tugasan Ini Dari Sistem</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveResolvingSubmission(null);
+                    setSelectedCandidateStudent(null);
+                  }}
+                  className="text-slate-600 hover:text-slate-800 text-xs font-bold px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedCandidateStudent || isVerifying}
+                  onClick={() => handleConfirmStudent(activeResolvingSubmission, selectedCandidateStudent)}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isVerifying ? (
+                    <span>Mengesahkan...</span>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Sahkan Pelajar Ini</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

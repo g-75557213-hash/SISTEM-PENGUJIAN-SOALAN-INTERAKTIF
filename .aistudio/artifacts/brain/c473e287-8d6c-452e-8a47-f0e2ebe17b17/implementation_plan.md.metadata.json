@@ -1,6 +1,6 @@
 {
-  "summary": "Pelan pelaksanaan integrasi Google Cloud Storage API & penjanaan pautan soalan awam (https://storage.googleapis.com/...) bagi mengemaskini tab Sheet1 Google Sheets.",
-  "updatedAt": "2026-11-05T06:05:41.200567703Z",
+  "summary": "Pelan pelaksanaan untuk integrasi pengesahan nama murid Google Classroom, padanan pintar (fuzzy matching) nama pendek dengan senarai roster kelas, kad profil pengesahan murid dengan butang 'Pasti' & 'Taip Manual', serta panel pengesahan guru bagi murid nama hampir sepadan/konflik di Semakan Guru.",
+  "updatedAt": "2026-11-07T03:55:03.762632500Z",
   "requestFeedback": true,
   "userFacing": true
 }

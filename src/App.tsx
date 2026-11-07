@@ -40,6 +40,18 @@ export default function App() {
     }
     return null;
   });
+  const [courseIdParam, setCourseIdParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('courseId');
+    }
+    return null;
+  });
+  const [courseWorkIdParam, setCourseWorkIdParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('courseWorkId');
+    }
+    return null;
+  });
   const [spreadsheetIdParam, setSpreadsheetIdParam] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return new URLSearchParams(window.location.search).get('spreadsheetId');
@@ -69,6 +81,8 @@ export default function App() {
     const kod = urlParams.get('kod');
     const kelas = urlParams.get('kelas');
     const mod = urlParams.get('mod');
+    const courseId = urlParams.get('courseId');
+    const courseWorkId = urlParams.get('courseWorkId');
     const sheetId = urlParams.get('spreadsheetId');
     const gasUrl = urlParams.get('gasWebAppUrl');
 
@@ -76,6 +90,8 @@ export default function App() {
     if (kod) setKodParam(kod);
     if (kelas) setKelasParam(kelas);
     if (mod) setModParam(mod);
+    if (courseId) setCourseIdParam(courseId);
+    if (courseWorkId) setCourseWorkIdParam(courseWorkId);
 
     if (sheetId) {
       setSpreadsheetIdParam(sheetId);
@@ -207,6 +223,8 @@ export default function App() {
         kod={kodParam}
         kelasParam={kelasParam}
         modParam={modParam}
+        courseId={courseIdParam}
+        courseWorkId={courseWorkIdParam}
         spreadsheetId={spreadsheetIdParam || spreadsheetId} 
         gasWebAppUrl={gasWebAppUrlParam || gasWebAppUrl} 
       />
@@ -1180,6 +1198,8 @@ function syncClassroom() {
         kod={kodParam}
         kelasParam={kelasParam}
         modParam={modParam}
+        courseId={courseIdParam}
+        courseWorkId={courseWorkIdParam}
         spreadsheetId={spreadsheetIdParam || spreadsheetId}
         gasWebAppUrl={gasWebAppUrlParam || gasWebAppUrl}
       />

@@ -22,7 +22,7 @@ export function getPublicBaseOrigin(): string {
  */
 export function buildDirectLink(
   qid: string,
-  extraParams?: { kod?: string; kelas?: string; tugasan?: string }
+  extraParams?: { kod?: string; kelas?: string; tugasan?: string; courseId?: string; courseWorkId?: string; mod?: string }
 ): string {
   const origin = getPublicBaseOrigin();
   const searchParams = new URLSearchParams();
@@ -30,7 +30,9 @@ export function buildDirectLink(
   if (extraParams?.kod) searchParams.set('kod', extraParams.kod);
   if (extraParams?.kelas) searchParams.set('kelas', extraParams.kelas);
   if (extraParams?.tugasan) searchParams.set('tugasan', extraParams.tugasan);
-  searchParams.set('mod', 'umum');
+  if (extraParams?.courseId) searchParams.set('courseId', extraParams.courseId);
+  if (extraParams?.courseWorkId) searchParams.set('courseWorkId', extraParams.courseWorkId);
+  searchParams.set('mod', extraParams?.mod || (extraParams?.courseId ? 'gc' : 'umum'));
 
   return `${origin}/?${searchParams.toString()}`;
 }
