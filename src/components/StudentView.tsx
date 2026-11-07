@@ -30,7 +30,10 @@ export default function StudentView({
   const currentKelasParam = initialKelas || urlParams?.get('kelas') || '';
   // Public Mode state - Strictly NO Google/Chrome Login required!
   const [isPublicMode, setIsPublicMode] = useState<boolean>(() => {
-    return initialMod === 'umum' || urlParams?.get('mod') === 'umum' || !!currentKod;
+    if (initialMod === 'delima' || urlParams?.get('mod') === 'delima') {
+      return false;
+    }
+    return true;
   });
 
   const [publicNama, setPublicNama] = useState('');
@@ -131,6 +134,21 @@ export default function StudentView({
         return;
       }
 
+      // 0. Built-in Demo Simulations
+      if (activeQid === "sim_ketumpatan" || activeQid === "sim_bandul") {
+        if (activeQid === "sim_ketumpatan") {
+          const simHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-900 text-white p-6"><h2 class="text-2xl font-bold text-blue-400 mb-4">Simulasi Ketumpatan</h2><div class="flex flex-col md:flex-row gap-6"><div class="w-full md:w-1/3 bg-slate-800 p-4 rounded-xl border border-slate-700"><label class="block text-sm font-bold mb-2">Pilih Cecair:</label><select id="liquid" class="w-full bg-slate-900 p-2 rounded border border-slate-600 mb-4"><option value="1.0">Air (1.0)</option><option value="0.9">Minyak (0.9)</option><option value="1.4">Madu (1.4)</option></select><label class="block text-sm font-bold mb-2">Jatuhkan Bahan:</label><div class="flex gap-2"><button onclick="drop('Gabus', 0.24)" class="flex-1 bg-orange-700 p-2 rounded font-bold">Gabus</button><button onclick="drop('Besi', 7.87)" class="flex-1 bg-slate-500 p-2 rounded font-bold">Besi</button></div><button onclick="resetSim()" class="w-full mt-4 bg-red-600 p-2 rounded font-bold">Reset</button></div><div class="w-full md:w-2/3 h-64 bg-slate-950 rounded-xl relative border border-slate-800 flex justify-center items-end p-8"><div id="beaker" class="w-48 h-56 border-4 border-t-0 border-blue-900 rounded-b-2xl relative overflow-hidden flex flex-col justify-end"><div id="water" class="w-full h-1/2 bg-blue-500/30 border-t-2 border-blue-400"></div><div id="objects" class="absolute inset-0"></div></div></div></div><table class="w-full mt-6 text-sm border border-slate-700"><thead class="bg-slate-800"><tr><th class="p-2 border">Bahan</th><th class="p-2 border">Keputusan</th></tr></thead><tbody id="results"></tbody></table><script>function drop(n,d){const l=parseFloat(document.getElementById('liquid').value);const r=d>l?'Tenggelam':'Terapung';const o=document.createElement('div');o.className='absolute text-xs text-center';o.style.left=(Math.random()*60+20)+'%';o.style.top=r==='Terapung'?'40%':'80%';o.innerHTML='<div class="bg-black/50 px-1 rounded">'+n+'</div><div class="w-8 h-8 rounded '+(n==='Gabus'?'bg-orange-700':'bg-slate-500')+'"></div>';document.getElementById('objects').appendChild(o);const tr=document.createElement('tr');tr.innerHTML='<td class="p-2 border">'+n+'</td><td class="p-2 border">'+r+'</td>';document.getElementById('results').appendChild(tr)}function resetSim(){document.getElementById('objects').innerHTML='';document.getElementById('results').innerHTML=''}</script></body></html>`;
+          setHtml(simHtml);
+          setLoading(false);
+          return;
+        } else if (activeQid === "sim_bandul") {
+          const simHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-900 text-white p-6"><h2 class="text-2xl font-bold text-fuchsia-400 mb-4">Bandul Ringkas</h2><div class="flex flex-col md:flex-row gap-6"><div class="w-full md:w-1/3 bg-slate-800 p-4 rounded-xl border border-slate-700"><label class="block text-sm mb-1">Panjang: <span id="lenVal">50</span>cm</label><input type="range" id="len" min="20" max="100" value="50" oninput="document.getElementById('lenVal').innerText=this.value" class="w-full mb-4"><button id="btn" onclick="toggle()" class="w-full bg-fuchsia-600 p-3 rounded-xl font-bold">MULA</button><div class="grid grid-cols-2 gap-4 mt-4 text-center"><div class="bg-slate-950 p-2 rounded border border-slate-700"><div class="text-[10px]">MASA (s)</div><div id="time" class="text-xl font-mono text-fuchsia-400">0.00</div></div><div class="bg-slate-950 p-2 rounded border border-slate-700"><div class="text-[10px]">AYUNAN</div><div id="count" class="text-xl font-mono text-emerald-400">0/10</div></div></div></div><div class="w-full md:w-2/3 h-64 bg-slate-950 rounded-xl relative overflow-hidden flex justify-center"><div id="pend" class="absolute top-0 origin-top" style="height:150px"><div class="w-0.5 h-full bg-slate-300 mx-auto"></div><div class="w-6 h-6 bg-pink-500 rounded-full -mt-3 mx-auto"></div></div></div></div><script>let r=false,s,req;function toggle(){const b=document.getElementById('btn');if(r){cancelAnimationFrame(req);r=false;b.innerText='MULA';return}r=true;b.innerText='BERHENTI';s=performance.now();const l=document.getElementById('len').value;const p=2*Math.PI*Math.sqrt(l/100/9.81);function animate(t){const e=(t-s)/1000;const a=-0.5*Math.cos((2*Math.PI/p)*e);document.getElementById('pend').style.transform='rotate('+a+'rad)';document.getElementById('time').innerText=e.toFixed(2);const o=Math.floor(e/p);document.getElementById('count').innerText=Math.min(10,o)+'/10';if(o>=10){r=false;b.innerText='MULA';return}req=requestAnimationFrame(animate)}req=requestAnimationFrame(animate)}</script></body></html>`;
+          setHtml(simHtml);
+          setLoading(false);
+          return;
+        }
+      }
+
       // 1. Instant Cache Load (< 10ms)
       let foundHtml = false;
       try {
@@ -142,16 +160,21 @@ export default function StudentView({
         }
       } catch (e) {}
 
-      // 2. Client-side Firestore SDK lookup (Instant, untruncated 100% full HTML)
+      // 2. Client-side Firestore SDK lookup with 2.5s timeout protection
       try {
-        const docRef = doc(db, "questions", String(activeQid));
-        let docSnap = await getDoc(docRef);
-        if (!docSnap.exists() && activeQid !== activeQid.toUpperCase()) {
-          docSnap = await getDoc(doc(db, "questions", activeQid.toUpperCase()));
-        }
-        if (docSnap.exists()) {
+        const fetchFs = async () => {
+          const docRef = doc(db, "questions", String(activeQid));
+          let docSnap = await getDoc(docRef);
+          if (!docSnap.exists() && activeQid !== activeQid.toUpperCase()) {
+            docSnap = await getDoc(doc(db, "questions", activeQid.toUpperCase()));
+          }
+          return docSnap;
+        };
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500));
+        const docSnap: any = await Promise.race([fetchFs(), timeoutPromise]);
+        if (docSnap && docSnap.exists()) {
           const docData = docSnap.data();
-          if (docData?.html && docData.html.trim().length > 100) {
+          if (docData?.html && docData.html.trim().length > 50) {
             setHtml(docData.html);
             try {
               localStorage.setItem(`cached_question_${activeQid}`, docData.html);
@@ -170,7 +193,7 @@ export default function StudentView({
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          if (data.html && data.html.trim().length > 100) {
+          if (data.html && data.html.trim().length > 50) {
             setHtml(data.html);
             try {
               localStorage.setItem(`cached_question_${activeQid}`, data.html);
@@ -289,25 +312,19 @@ export default function StudentView({
       return (
         <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-emerald-50/40 to-teal-100/50 p-4">
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-2 border-emerald-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner text-3xl font-bold">
+            <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner text-3xl font-bold">
               🎓
-            </div>
-            
-            <div className="flex justify-center mb-2">
-              <span className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-800 border-emerald-300 text-[11px] font-black px-3.5 py-1 rounded-full border shadow-xs uppercase tracking-wide">
-                <span>✨</span> MOD UMUM • TIADA LOG MASUK CHROME
-              </span>
             </div>
 
             <h2 className="text-2xl font-black text-center text-slate-800 mb-1">
               Pengesahan Murid
             </h2>
-            <p className="text-xs text-center text-slate-600 mb-5 leading-relaxed font-medium">
-              Sila masukkan <span className="font-bold text-emerald-800">NAMA PENUH (HURUF BESAR)</span> anda untuk memulakan soalan kuiz.
+            <p className="text-xs text-center text-slate-500 mb-5 leading-relaxed font-medium">
+              Sila masukkan nama penuh anda untuk memulakan kuiz.
             </p>
 
             {currentKod && (
-              <div className="mb-4.5 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between shadow-xs">
+              <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between shadow-xs">
                 <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5" /> Kod Tugasan:
                 </span>
@@ -319,14 +336,9 @@ export default function StudentView({
 
             <form onSubmit={handleStartPublicQuiz} className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
-                    NAMA PENUH PELAJAR (HURUF BESAR) <span className="text-red-500">*</span>
-                  </label>
-                  <span className="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 uppercase">
-                    HURUF BESAR
-                  </span>
-                </div>
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
+                  NAMA PENUH PELAJAR <span className="text-red-500">*</span>
+                </label>
                 <input 
                   type="text"
                   required
@@ -346,14 +358,11 @@ export default function StudentView({
                   placeholder="CONTOH: AHMAD BIN ABDULLAH"
                   autoFocus
                 />
-                <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium leading-tight">
-                  <span>⚠️</span> Sila taip nama penuh rasmi dalam <strong>HURUF BESAR</strong> seperti dalam rekod sekolah.
-                </p>
               </div>
 
               <button 
                 type="submit"
-                className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black py-4 px-4 rounded-xl transition shadow-lg shadow-emerald-600/25 text-base flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                className="w-full mt-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-600/25 text-base flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
                 <span>Mula Menjawab Tugasan</span>
                 <span className="text-lg">➔</span>
@@ -439,9 +448,14 @@ export default function StudentView({
       </script>
     `;
 
-    const injectedPublicHtml = html.includes('</head>') 
-      ? html.replace('</head>', `${publicScriptToInject}</head>`)
-      : `${publicScriptToInject}${html}`;
+    let injectedPublicHtml = html;
+    if (/<\/head>/i.test(injectedPublicHtml)) {
+      injectedPublicHtml = injectedPublicHtml.replace(/<\/head>/i, `${publicScriptToInject}</head>`);
+    } else if (/<body[^>]*>/i.test(injectedPublicHtml)) {
+      injectedPublicHtml = injectedPublicHtml.replace(/<body[^>]*>/i, (match) => `${match}${publicScriptToInject}`);
+    } else {
+      injectedPublicHtml = `<!DOCTYPE html><html><head>${publicScriptToInject}</head><body>${injectedPublicHtml}</body></html>`;
+    }
 
     return (
       <div className="h-screen w-screen flex flex-col bg-slate-50 overflow-hidden">
@@ -484,8 +498,9 @@ export default function StudentView({
 
         <iframe 
           srcDoc={injectedPublicHtml}
-          className="w-full h-full border-0 flex-1"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          style={{ width: '100%', height: 'calc(100vh - 56px)', minHeight: 'calc(100vh - 56px)', border: 'none', display: 'block' }}
+          className="w-full flex-1 bg-white"
+          title="Tugasan Soalan Interaktif"
         />
       </div>
     );
@@ -631,9 +646,14 @@ export default function StudentView({
     </script>
   `;
 
-  const injectedHtml = html.includes('</head>')
-    ? html.replace('</head>', `${scriptToInject}</head>`)
-    : `${scriptToInject}${html}`;
+  let injectedHtml = html || '';
+  if (/<\/head>/i.test(injectedHtml)) {
+    injectedHtml = injectedHtml.replace(/<\/head>/i, `${scriptToInject}</head>`);
+  } else if (/<body[^>]*>/i.test(injectedHtml)) {
+    injectedHtml = injectedHtml.replace(/<body[^>]*>/i, (match) => `${match}${scriptToInject}`);
+  } else {
+    injectedHtml = `<!DOCTYPE html><html><head>${scriptToInject}</head><body>${injectedHtml}</body></html>`;
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50">
@@ -651,8 +671,9 @@ export default function StudentView({
       </div>
       <iframe 
         srcDoc={injectedHtml}
-        className="w-full h-full border-0 flex-1"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        style={{ width: '100%', height: 'calc(100vh - 56px)', minHeight: 'calc(100vh - 56px)', border: 'none', display: 'block' }}
+        className="w-full flex-1 bg-white"
+        title="Kuiz Interaktif DELIMa"
       />
     </div>
   );

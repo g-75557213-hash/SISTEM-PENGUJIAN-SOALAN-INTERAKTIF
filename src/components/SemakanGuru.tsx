@@ -1285,9 +1285,9 @@ export default function SemakanGuru({
                           </td>
                           <td className="py-3.5 px-4 font-black text-slate-900 uppercase tracking-wide">
                             <span>{sub.nama}</span>
-                            {(sub.isSites || sub.source === 'Google Sites' || (sub.kod && sub.kod.startsWith('GS-'))) && (
+                            {(sub.isSites || sub.source === 'Google Sites' || (sub.kod && sub.kod.startsWith('GS-')) || sub.kod && sub.kod.startsWith('TU-')) && (
                               <span className="ml-2 inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300">
-                                🌐 Sites
+                                🌐 Mod Umum
                               </span>
                             )}
                             {sub.fromSheet && (
@@ -1355,7 +1355,10 @@ export default function SemakanGuru({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {tugasanUmumList.map(t => {
-                  const studentUrl = `${window.location.origin}/?qid=${t.qid}&kod=${encodeURIComponent(t.kod)}&kelas=${encodeURIComponent(t.kelas)}&mod=umum`;
+                  const baseOrigin = window.location.origin.includes('ais-dev-') 
+                    ? window.location.origin.replace('ais-dev-', 'ais-pre-') 
+                    : window.location.origin;
+                  const studentUrl = `${baseOrigin}/?qid=${t.qid}&kod=${encodeURIComponent(t.kod)}&kelas=${encodeURIComponent(t.kelas)}&mod=umum`;
                   const subCount = tugasanUmumSubs.filter(s => s.kod === t.kod).length;
 
                   return (

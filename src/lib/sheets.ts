@@ -3,6 +3,20 @@ import { db } from './firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 /**
+ * Mendapatkan domain awam (Public Shared Origin) yang boleh diakses oleh sesiapa sahaja
+ * tanpa memerlukan akaun Google pembina atau kelulusan dev.
+ */
+export function getPublicBaseOrigin(): string {
+  if (typeof window === 'undefined') return '';
+  let origin = window.location.origin;
+  // Tukar persekitaran 'ais-dev-' kepada pautan kongsi awam 'ais-pre-'
+  if (origin.includes('ais-dev-')) {
+    origin = origin.replace('ais-dev-', 'ais-pre-');
+  }
+  return origin;
+}
+
+/**
  * Membina pautan terus murid yang sah dan berfungsi 100% tanpa sebarang ralat.
  * Format: https://[domain_app]/?qid=SQ-0001&mod=umum
  */
@@ -10,7 +24,7 @@ export function buildDirectLink(
   qid: string,
   extraParams?: { kod?: string; kelas?: string; tugasan?: string }
 ): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const origin = getPublicBaseOrigin();
   const searchParams = new URLSearchParams();
   searchParams.set('qid', qid);
   if (extraParams?.kod) searchParams.set('kod', extraParams.kod);
@@ -647,18 +661,31 @@ export async function updateTugasanStatus(
   rowNum: number,
   status: string,
   courseId: string,
-  courseWorkId: string
+  courseWorkId: string,
+  linkTugasan?: string
 ): Promise<void> {
   try {
-    // Update G & H (CourseId, CourseWorkId)
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN!G${rowNum}:H${rowNum}?valueInputOption=USER_ENTERED`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ values: [[courseId, courseWorkId]] })
-    });
+    if (linkTugasan) {
+      // Update F, G & H (LinkTugasan, CourseId, CourseWorkId)
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN!F${rowNum}:H${rowNum}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [[linkTugasan, courseId, courseWorkId]] })
+      });
+    } else {
+      // Update G & H (CourseId, CourseWorkId)
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/TUGASAN!G${rowNum}:H${rowNum}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ values: [[courseId, courseWorkId]] })
+      });
+    }
   } catch (err) {
     console.error('Error updating tugasan status:', err);
   }
@@ -1845,10 +1872,10 @@ export async function appendMarkahMuridRow(
       (sub.nama || '').toString().trim().toUpperCase(),
       (sub.email || '').toString().trim(),
       (sub.kelas || '').toString().trim().toUpperCase(),
-      (sub.tugasan || 'TUGASAN GOOGLE SITES').toString().trim(),
+      (sub.tugasan || 'TUGASAN INTERAKTIF').toString().trim(),
       sub.markah !== undefined && sub.markah !== null ? `${sub.markah}%` : '-',
       sub.status || 'Selesai',
-      sub.statusSyncGc || 'Google Sites',
+      sub.statusSyncGc || 'Tugasan Umum',
       (sub.kodUnik || '').toString().trim().toUpperCase()
     ];
 

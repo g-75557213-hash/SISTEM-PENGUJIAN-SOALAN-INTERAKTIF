@@ -175,7 +175,10 @@ export default function BankSoalan({
   };
 
   const getPublicQuizUrl = (qid: string, kod: string, kelas: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    let origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (origin.includes('ais-dev-')) {
+      origin = origin.replace('ais-dev-', 'ais-pre-');
+    }
     return `${origin}/?qid=${encodeURIComponent(qid)}&kod=${encodeURIComponent(kod)}&kelas=${encodeURIComponent(kelas)}&mod=umum`;
   };
 
@@ -367,7 +370,7 @@ export default function BankSoalan({
         
         // 4. Update the "TUGASAN" sheet
         if (rowNum) {
-          await updateTugasanStatus(token, spreadsheetId, rowNum, "Telah Di-Post", courseId, assignment.id);
+          await updateTugasanStatus(token, spreadsheetId, rowNum, "Telah Di-Post", courseId, assignment.id, linkToUse);
         }
         
         assignmentsCreated.push({
@@ -700,11 +703,11 @@ export default function BankSoalan({
                         {!isPosted ? (
                           <div className="relative z-0 space-y-2">
                             <button 
-                              onClick={() => setPreviewQuestion(q)}
-                              className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm"
+                              onClick={() => openSendModal(q)}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
                             >
-                              <Eye className="w-4 h-4 mr-1.5 text-slate-500" />
-                              Pratonton Soalan
+                              <Send className="w-3.5 h-3.5 mr-1.5" />
+                              Hantar ke Google Classroom
                             </button>
                             <button 
                               onClick={() => handleOpenPublicModal(q)}
@@ -714,12 +717,19 @@ export default function BankSoalan({
                               Link Tugasan Umum (Tanpa GC)
                             </button>
                             <button 
+                              onClick={() => setPreviewQuestion(q)}
+                              className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm"
+                            >
+                              <Eye className="w-4 h-4 mr-1.5 text-slate-500" />
+                              Pratonton Soalan
+                            </button>
+                            <button 
                               onClick={() => {
                                 const directLink = buildDirectLink(q.idSoalan);
                                 navigator.clipboard.writeText(directLink);
                                 alert("Pautan terus (Direct Link) soalan berjaya disalin!\n" + directLink);
                               }}
-                              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-300 gap-1.5 shadow-2xs"
+                              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-300 gap-1.5 shadow-2xs cursor-pointer"
                               title="Salin Direct Link Soalan untuk murid"
                             >
                               <Link className="w-3.5 h-3.5 text-blue-600" />

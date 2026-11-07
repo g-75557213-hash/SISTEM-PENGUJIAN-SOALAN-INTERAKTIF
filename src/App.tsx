@@ -16,9 +16,42 @@ import { Gamepad2, Sparkles, Layers } from 'lucide-react';
 export default function App() {
   const [systemMode, setSystemMode] = useState<'soalan_interaktif' | 'live_gamification'>('soalan_interaktif');
   const [isSimulationActive, setIsSimulationActive] = useState(false);
-  const [qidParams, setQidParams] = useState<string | null>(null);
-  const [spreadsheetIdParam, setSpreadsheetIdParam] = useState<string | null>(null);
-  const [gasWebAppUrlParam, setGasWebAppUrlParam] = useState<string | null>(null);
+  const [qidParams, setQidParams] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('qid');
+    }
+    return null;
+  });
+  const [kodParam, setKodParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('kod');
+    }
+    return null;
+  });
+  const [kelasParam, setKelasParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('kelas');
+    }
+    return null;
+  });
+  const [modParam, setModParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('mod');
+    }
+    return null;
+  });
+  const [spreadsheetIdParam, setSpreadsheetIdParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('spreadsheetId');
+    }
+    return null;
+  });
+  const [gasWebAppUrlParam, setGasWebAppUrlParam] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('gasWebAppUrl');
+    }
+    return null;
+  });
 
   const [spreadsheetId, setSpreadsheetId] = useState(() => {
     return localStorage.getItem('smkj_spreadsheet_id') || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
@@ -30,10 +63,6 @@ export default function App() {
     return localStorage.getItem('smkj_drive_folder_link') || '';
   });
 
-  const [kodParam, setKodParam] = useState<string | null>(null);
-  const [kelasParam, setKelasParam] = useState<string | null>(null);
-  const [modParam, setModParam] = useState<string | null>(null);
-
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const qid = urlParams.get('qid');
@@ -43,10 +72,10 @@ export default function App() {
     const sheetId = urlParams.get('spreadsheetId');
     const gasUrl = urlParams.get('gasWebAppUrl');
 
-    setQidParams(qid);
-    setKodParam(kod);
-    setKelasParam(kelas);
-    setModParam(mod);
+    if (qid) setQidParams(qid);
+    if (kod) setKodParam(kod);
+    if (kelas) setKelasParam(kelas);
+    if (mod) setModParam(mod);
 
     if (sheetId) {
       setSpreadsheetIdParam(sheetId);
@@ -171,10 +200,10 @@ export default function App() {
     }
   }, [user]);
 
-  if (qidParams) {
+  if (qidParams || kodParam) {
     return (
       <StudentView 
-        qid={qidParams} 
+        qid={qidParams || ''} 
         kod={kodParam}
         kelasParam={kelasParam}
         modParam={modParam}
@@ -2371,7 +2400,7 @@ function syncClassroom() {
                       <li>Di sel <strong className="text-blue-600 font-bold">F1</strong> (tajuk lajur LINK TUGASAN), masukkan formula ARRAYFORMULA di bawah untuk menjana pautan terus soalan secara automatik:
                         <textarea
                           readOnly
-                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${(typeof window !== 'undefined' ? window.location.origin : '')}/?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D) & "&mod=umum"))}`}
+                          value={`={"LINK TUGASAN"; ARRAYFORMULA(IF(B2:B="", "", "${(typeof window !== 'undefined' ? (window.location.origin.includes('ais-dev-') ? window.location.origin.replace('ais-dev-', 'ais-pre-') : window.location.origin) : '')}/?qid=" & B2:B & "&kelas=" & ENCODEURL(A2:A) & "&tugasan=" & ENCODEURL(C2:C) & "&kod=" & ENCODEURL(D2:D) & "&mod=umum"))}`}
                           className="w-full mt-1.5 p-2 font-mono text-[10px] text-emerald-400 bg-slate-950 border border-slate-800 rounded focus:outline-none focus:ring-0 select-all whitespace-pre-wrap leading-relaxed cursor-pointer"
                           rows={3}
                           onClick={(e) => {
