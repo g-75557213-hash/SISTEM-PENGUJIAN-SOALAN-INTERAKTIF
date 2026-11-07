@@ -498,13 +498,10 @@ export default function StudentView({
                     }}
                     onChange={(e) => setManualInputName(e.target.value.toUpperCase())}
                     style={{
-                      color: '#000000',
-                      WebkitTextFillColor: '#000000',
                       backgroundColor: '#ffffff',
-                      caretColor: '#000000',
                       textTransform: 'uppercase'
                     }}
-                    className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-black focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal shadow-xs transition"
+                    className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:!text-slate-400 placeholder:!opacity-40 placeholder:!font-normal shadow-xs transition"
                     placeholder="CONTOH: DANISH ATAU AHMAD"
                     autoFocus
                   />
@@ -837,13 +834,10 @@ export default function StudentView({
                 }}
                 onChange={(e) => setPublicNama(e.target.value.toUpperCase())}
                 style={{ 
-                  color: '#000000', 
-                  WebkitTextFillColor: '#000000', 
                   backgroundColor: '#ffffff', 
-                  caretColor: '#000000',
                   textTransform: 'uppercase'
                 }}
-                className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-black focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none uppercase placeholder:text-slate-400 placeholder:font-normal shadow-xs transition"
+                className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none uppercase placeholder:!text-slate-400 placeholder:!opacity-40 placeholder:!font-normal shadow-xs transition"
                 placeholder="CONTOH: AHMAD BIN ABDULLAH"
                 autoFocus
               />

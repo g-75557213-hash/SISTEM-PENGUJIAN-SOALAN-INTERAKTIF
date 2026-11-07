@@ -6,3 +6,11 @@
   --color-primary: #1e293b;
   --color-secondary: #f1f5f9;
 }
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+  opacity: 0.5 !important;
+  font-weight: 400 !important;
+}
