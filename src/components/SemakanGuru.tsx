@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission } from '../lib/classroom';
+import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission, deleteAssignment } from '../lib/classroom';
 import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check } from 'lucide-react';
-import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, buildDirectLink } from '../lib/sheets';
+import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, deleteClassroomAssignmentAndMarksFromSheets, buildDirectLink } from '../lib/sheets';
 import { logout } from '../lib/firebase';
 
 export default function SemakanGuru({ 
@@ -52,6 +52,138 @@ export default function SemakanGuru({
   const [copiedUmumMarks, setCopiedUmumMarks] = useState(false);
   const [deletingUmumKod, setDeletingUmumKod] = useState<string | null>(null);
   const [deletingScoreKey, setDeletingScoreKey] = useState<string | null>(null);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
+
+  const handleDeleteClassroomAssignment = async (assn: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!assn || !assn.id) return;
+
+    const currentClassObj = classes.find(c => c.id === selectedClass);
+    const className = currentClassObj?.name || 'Kelas Semasa';
+    const assnTitle = assn.title || 'Tugasan';
+
+    const confirmed = confirm(
+      `⚠️ PENGESAHAN PEMADAMAN TUGASAN:\n\n` +
+      `Adakah anda pasti mahu memadam tugasan ini secara kekal?\n` +
+      `• Tugasan: "${assnTitle}"\n` +
+      `• Kelas: ${className}\n\n` +
+      `Tindakan ini akan memadam SECARA SERENTAK:\n` +
+      `1. Tugasan dalam Google Classroom (dipadam dari classwork/aliran)\n` +
+      `2. Rekod tugasan dalam Google Spreadsheet (tab TUGASAN)\n` +
+      `3. SEMUA rekod markah pelajar tugasan ini dalam Google Spreadsheet (tab 'Markah Murid')\n` +
+      `4. Rekod tugasan dan markah pelajar dalam pangkalan data sistem & Firestore.\n\n` +
+      `Adakah anda ingin meneruskan?`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingAssignmentId(assn.id);
+    try {
+      let classroomDeleted = false;
+      let sheetsDetail = "";
+
+      // 1. Padam daripada Google Classroom API
+      if (token && selectedClass) {
+        try {
+          await deleteAssignment(token, selectedClass, assn.id);
+          classroomDeleted = true;
+        } catch (gcErr: any) {
+          console.error("Ralat memadam tugasan Google Classroom:", gcErr);
+          if (gcErr.message === 'UNAUTHENTICATED') {
+            alert("Sesi log masuk Google telah tamat. Sila log masuk semula.");
+            return;
+          }
+        }
+      }
+
+      // 2. Tentukan QID dan kod unik
+      let matchedQid = currentTugasanMatch.qid;
+      if (!matchedQid && assignmentStatus) {
+        for (const key in assignmentStatus) {
+          const s = assignmentStatus[key];
+          if (s.assignmentId === assn.id || (s.assignments && s.assignments.some((a: any) => a.assignmentId === assn.id || a.courseWorkId === assn.id))) {
+            matchedQid = key;
+            break;
+          }
+        }
+      }
+
+      // 3. Padam dari Google Sheets (tab TUGASAN dan Markah Murid secara serentak)
+      const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('google_access_token') : null);
+      const activeSheetId = spreadsheetId || (typeof window !== 'undefined' ? localStorage.getItem('smkj_spreadsheet_id') : null) || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A';
+
+      if (activeToken && activeSheetId) {
+        try {
+          const sheetRes = await deleteClassroomAssignmentAndMarksFromSheets(activeToken, activeSheetId, {
+            courseId: selectedClass,
+            courseWorkId: assn.id,
+            qid: matchedQid,
+            assignmentTitle: assnTitle,
+            className: currentClassObj?.name,
+            kod: currentTugasanMatch.kodUnik
+          });
+
+          if (sheetRes.success) {
+            sheetsDetail = `\n• Google Sheets: ${sheetRes.deletedTugasanCount} baris TUGASAN & ${sheetRes.deletedMarkahCount} rekod Markah Murid dipadam`;
+          }
+        } catch (sheetErr) {
+          console.error("Gagal memadam dari Google Sheets:", sheetErr);
+        }
+      }
+
+      // 4. Padam dari pangkalan data sistem & Firestore
+      try {
+        await fetch('/api/delete-classroom-assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            courseId: selectedClass,
+            courseWorkId: assn.id,
+            qid: matchedQid,
+            kod: currentTugasanMatch.kodUnik,
+            email: user?.email,
+            assignmentTitle: assnTitle
+          })
+        });
+      } catch (srvErr) {
+        console.warn("Gagal memadam dari pelayan:", srvErr);
+      }
+
+      // 5. Kemaskini State React secara SERTA-MERTA
+      setAssignments(prev => prev.filter(a => a.id !== assn.id));
+
+      if (selectedAssignment === assn.id) {
+        setSelectedAssignment('');
+        setSubmissions([]);
+        setPendingVerifications([]);
+      }
+
+      setOurSubmissions(prev => prev.filter(sub => {
+        const matchTitle = (sub.tugasan || '').toUpperCase().trim() === assnTitle.toUpperCase().trim();
+        const matchCode = sub.kodUnik && (sub.kodUnik === assn.id || sub.kodUnik === `WG-${assn.id}` || sub.kodUnik === currentTugasanMatch.kodUnik);
+        const matchQid = matchedQid && sub.qid === matchedQid;
+        return !(matchTitle || matchCode || (matchQid && sub.kelas === currentClassObj?.name));
+      }));
+
+      if (loadAssignmentStatus) {
+        try {
+          await loadAssignmentStatus();
+        } catch (e) {}
+      }
+
+      alert(
+        `✓ Tugasan "${assnTitle}" berjaya dipadam sepenuhnya secara serentak!\n` +
+        `• Google Classroom: ${classroomDeleted ? 'Berjaya dipadam' : 'Dikeluarkan'}` +
+        sheetsDetail +
+        `\n• Sistem & Firestore: Rekod berkaitan dibersihkan secara automatik.`
+      );
+    } catch (err: any) {
+      console.error("Ralat dalam handleDeleteClassroomAssignment:", err);
+      alert(`Ralat memadam tugasan: ${err.message || 'Sila cuba lagi.'}`);
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  };
 
   // Pending verification states for short-names and teacher confirmations
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
@@ -443,7 +575,19 @@ export default function SemakanGuru({
     const cleanKod = (kod || '').trim().toUpperCase();
     if (!cleanKod) return;
 
-    if (!confirm(`Adakah anda pasti mahu memadam tugasan umum dengan kod ${cleanKod}?\n\nTindakan ini akan memadam rekod tugasan dari sistem, membuang baris tugasan dari tab "TUGASAN UMUM" dan memadam rekod markah murid berkaitan dari tab "Markah Murid" di Google Sheets.`)) {
+    const assnItem = tugasanUmumList.find(i => (i.kod || '').toString().trim().toUpperCase() === cleanKod);
+    const tajukStr = assnItem ? `${assnItem.subjek ? assnItem.subjek + ' - ' : ''}${assnItem.soalanTajuk || assnItem.bab || assnItem.qid}` : cleanKod;
+    const kelasStr = assnItem?.kelas ? ` (Kelas: ${assnItem.kelas})` : '';
+
+    if (!confirm(
+      `⚠️ PENGESAHAN PEMADAMAN TUGASAN UMUM:\n\n` +
+      `Adakah anda pasti mahu memadam tugasan umum "${tajukStr}"${kelasStr} (Kod: ${cleanKod})?\n\n` +
+      `Tindakan ini akan memadam SECARA SERENTAK:\n` +
+      `1. Rekod pautan tugasan dari tab "TUGASAN UMUM" di Google Spreadsheet\n` +
+      `2. SEMUA markah pelajar yang menjawab tugasan ini di tab "Markah Murid" di Google Spreadsheet\n` +
+      `3. Rekod tugasan dan markah pelajar dalam pangkalan data sistem & Firestore.\n\n` +
+      `Adakah anda ingin meneruskan?`
+    )) {
       return;
     }
 
@@ -465,7 +609,11 @@ export default function SemakanGuru({
 
       // 3. Panggil API pelayan untuk padam tugasan umum & rekod markah berkaitan
       try {
-        await fetch(`/api/tugasan-umum/${encodeURIComponent(cleanKod)}`, { method: 'DELETE' });
+        const urlParams = new URLSearchParams();
+        if (assnItem?.qid) urlParams.set('qid', assnItem.qid);
+        if (assnItem?.kelas) urlParams.set('kelas', assnItem.kelas);
+        const queryStr = urlParams.toString() ? `?${urlParams.toString()}` : '';
+        await fetch(`/api/tugasan-umum/${encodeURIComponent(cleanKod)}${queryStr}`, { method: 'DELETE' });
       } catch (errServer) {
         console.warn("Ralat padam tugasan dari pelayan:", errServer);
       }
@@ -477,7 +625,11 @@ export default function SemakanGuru({
       let sheetDetail = "";
       if (activeToken && activeSheetId) {
         try {
-          const sheetDelRes = await deleteTugasanUmumRowFromSheet(activeToken, activeSheetId, cleanKod);
+          const sheetDelRes = await deleteTugasanUmumRowFromSheet(activeToken, activeSheetId, cleanKod, {
+            qid: assnItem?.qid,
+            kelas: assnItem?.kelas,
+            tajuk: assnItem?.soalanTajuk || assnItem?.bab
+          });
           if (sheetDelRes.success) {
             sheetDetail = `\n\n📊 Status Google Sheets:\n• Tab TUGASAN UMUM: ${sheetDelRes.deletedUmumCount} baris dipadam\n• Tab Markah Murid: ${sheetDelRes.deletedMarkahCount} rekod markah dipadam`;
           } else {
@@ -488,7 +640,7 @@ export default function SemakanGuru({
         }
       }
 
-      alert(`Tugasan umum (${cleanKod}) berjaya dipadam sepenuhnya dari sistem!${sheetDetail}`);
+      alert(`✓ Tugasan umum (${cleanKod}) berjaya dipadam sepenuhnya dari sistem!${sheetDetail}`);
       await loadTugasanUmumData();
     } catch (e: any) {
       console.error(e);
@@ -1641,8 +1793,30 @@ export default function SemakanGuru({
 
         {/* 2. Pilih Tugasan */}
         <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-          <div className="bg-slate-50 p-4 border-b border-slate-200 font-medium text-slate-700">
-            2. Pilih Tugasan
+          <div className="bg-slate-50 p-4 border-b border-slate-200 font-medium text-slate-700 flex justify-between items-center">
+            <span>2. Pilih Tugasan ({selectedClass ? assignments.length : 0})</span>
+            {selectedClass && token && (
+              <button
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const freshAssns = await getAssignments(token, selectedClass);
+                    setAssignments(freshAssns);
+                    if (loadAssignmentStatus) await loadAssignmentStatus();
+                  } catch (e) {
+                    console.error("Gagal muat semula senarai tugasan:", e);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition"
+                title="Muat semula senarai tugasan dari Google Classroom"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Segar Semula</span>
+              </button>
+            )}
           </div>
           <div className="p-4 overflow-y-auto flex-1 space-y-2">
             {!selectedClass ? (
@@ -1671,23 +1845,39 @@ export default function SemakanGuru({
                 }
                 
                 return (
-                <button
-                  key={a.id}
-                  onClick={() => setSelectedAssignment(a.id)}
-                  className={`w-full text-left p-3 rounded-lg border ${selectedAssignment === a.id ? (isWayground ? 'border-[#ff158a] bg-[#ffe6f0] text-[#b80b62] shadow-sm' : 'border-blue-500 bg-blue-50 text-blue-700') : isWayground ? 'border-[#ffcce3] bg-[#fff0f7] text-[#e01078] hover:border-[#ff99c8]' : isInteractive ? 'border-[#10b981] bg-[#eefcf4] text-[#064e3b]' : 'border-slate-200 hover:border-slate-300'} transition`}
-                >
-                  <div className="font-medium flex items-center justify-between">
-                    <span className="line-clamp-1">{a.title}</span>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      {isWayground && <span className="bg-[#ff158a] text-white text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wider">WAYGROUND</span>}
-                      {isInteractive && !isWayground && <CheckCircle className="w-4 h-4 text-[#10b981]" />}
+                  <div
+                    key={a.id}
+                    onClick={() => setSelectedAssignment(a.id)}
+                    className={`group relative w-full text-left p-3 rounded-xl border cursor-pointer transition ${
+                      selectedAssignment === a.id 
+                        ? (isWayground ? 'border-[#ff158a] bg-[#ffe6f0] text-[#b80b62] shadow-sm' : 'border-blue-500 bg-blue-50 text-blue-700 shadow-xs') 
+                        : isWayground ? 'border-[#ffcce3] bg-[#fff0f7] text-[#e01078] hover:border-[#ff99c8]' 
+                        : isInteractive ? 'border-[#10b981] bg-[#eefcf4] text-[#064e3b]' 
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="font-medium flex items-center justify-between gap-2">
+                      <span className="line-clamp-1 font-semibold">{a.title}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isWayground && <span className="bg-[#ff158a] text-white text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wider">WAYGROUND</span>}
+                        {isInteractive && !isWayground && <CheckCircle className="w-4 h-4 text-[#10b981]" />}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteClassroomAssignment(a, e)}
+                          disabled={deletingAssignmentId === a.id}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition shrink-0 ml-1"
+                          title="Padam tugasan Google Classroom, rekod Google Sheets & markah murid secara serentak"
+                        >
+                          <Trash2 className={`w-3.5 h-3.5 ${deletingAssignmentId === a.id ? 'animate-spin text-red-600' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-xs mt-1.5 line-clamp-2 opacity-70">
+                      {isWayground ? "Tugasan disync dari laporan Wayground." : isInteractive ? "Tugasan ini aktif di Google Classroom!" : (a.description || "Tiada deskripsi.")}
                     </div>
                   </div>
-                  <div className="text-xs mt-1.5 line-clamp-2 opacity-70">
-                    {isWayground ? "Tugasan disync dari laporan Wayground." : isInteractive ? "Tugasan ini aktif di Google Classroom!" : (a.description || "Tiada deskripsi.")}
-                  </div>
-                </button>
-              )})
+                );
+              })
             )}
           </div>
         </div>
@@ -1698,34 +1888,49 @@ export default function SemakanGuru({
             <span>3. Status Pelajar ({selectedAssignment ? students.length : 0})</span>
             <div className="flex items-center gap-2">
               {selectedClass && selectedAssignment && token && (
-                <button
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      const { getMarkahMurid, getDataWayground } = await import('../lib/sheets');
-                      const [updatedSubs, updatedMarks, updatedWayground] = await Promise.all([
-                        getStudentSubmissions(token, selectedClass, selectedAssignment),
-                        getMarkahMurid(token, spreadsheetId),
-                        getDataWayground(token, spreadsheetId).catch(() => [])
-                      ]);
-                      setSubmissions(updatedSubs);
-                      setOurSubmissions(updatedMarks);
-                      setWaygroundData(updatedWayground);
-                    } catch (err) {
-                      console.error("Gagal muat semula data:", err);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                  className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded border border-blue-200 transition"
-                  title="Muat semula markah pelajar terkini"
-                >
-                  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3" />
-                  </svg>
-                  Muat Semula
-                </button>
+                <>
+                  <button
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const { getMarkahMurid, getDataWayground } = await import('../lib/sheets');
+                        const [updatedSubs, updatedMarks, updatedWayground] = await Promise.all([
+                          getStudentSubmissions(token, selectedClass, selectedAssignment),
+                          getMarkahMurid(token, spreadsheetId),
+                          getDataWayground(token, spreadsheetId).catch(() => [])
+                        ]);
+                        setSubmissions(updatedSubs);
+                        setOurSubmissions(updatedMarks);
+                        setWaygroundData(updatedWayground);
+                        await loadPendingVerifications(selectedClass);
+                      } catch (err) {
+                        console.error("Gagal muat semula data:", err);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded border border-blue-200 transition"
+                    title="Muat semula markah pelajar terkini"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    <span>Muat Semula</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const curAssn = assignments.find(a => a.id === selectedAssignment);
+                      if (curAssn) handleDeleteClassroomAssignment(curAssn, e);
+                    }}
+                    disabled={deletingAssignmentId === selectedAssignment}
+                    className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded border border-red-200 transition"
+                    title="Padam tugasan ini secara serentak dalam Google Classroom, Google Sheets (TUGASAN & Markah Murid), dan Firestore"
+                  >
+                    <Trash2 className={`w-3.5 h-3.5 ${deletingAssignmentId === selectedAssignment ? 'animate-spin' : ''}`} />
+                    <span>Padam Tugasan</span>
+                  </button>
+                </>
               )}
               {(() => {
                 let matchedQid = currentTugasanMatch.qid;
@@ -1752,10 +1957,11 @@ export default function SemakanGuru({
                           alert("Gagal reset status.");
                         }
                       }}
-                      className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition"
+                      className="flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded border border-amber-200 transition"
+                      title="Reset markah pelajar sahaja tanpa memadam tugasan"
                     >
                       <RotateCcw className="w-3 h-3" />
-                      Reset
+                      Reset Markah
                     </button>
                   );
                 }

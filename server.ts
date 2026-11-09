@@ -869,8 +869,12 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
   app.delete("/api/tugasan-umum/:kod", async (req, res) => {
     try {
       const { kod } = req.params;
+      const { qid, kelas } = req.query;
       if (!kod) return res.status(400).json({ error: "Missing kod" });
       const cleanKod = kod.toUpperCase().trim();
+      const cleanQid = qid ? String(qid).toUpperCase().trim() : '';
+      const cleanKelas = kelas ? String(kelas).toUpperCase().trim() : '';
+
       inMemoryTugasanUmum.delete(cleanKod);
       try {
         await db.collection("tugasan_umum").doc(cleanKod).delete();
@@ -881,7 +885,14 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
       // Also clean up any associated student submissions for this kod
       for (const [key, val] of inMemorySubmissions.entries()) {
         const valKod = (val.kod || '').toUpperCase().trim();
-        if (valKod === cleanKod) {
+        const valQid = (val.qid || '').toUpperCase().trim();
+        const valKelas = (val.kelas || '').toUpperCase().trim();
+
+        let match = false;
+        if (valKod === cleanKod || key.includes(cleanKod)) match = true;
+        else if (cleanQid && valQid === cleanQid && cleanKelas && valKelas === cleanKelas) match = true;
+
+        if (match) {
           inMemorySubmissions.delete(key);
         }
       }
@@ -891,6 +902,15 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         if (subSnap.docs && subSnap.docs.length > 0) {
           await Promise.all(subSnap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
         }
+        if (cleanQid && cleanKelas) {
+          const subSnapQ = await db.collection("submissions")
+            .where("qid", "==", cleanQid)
+            .where("kelas", "==", cleanKelas)
+            .get();
+          if (subSnapQ.docs && subSnapQ.docs.length > 0) {
+            await Promise.all(subSnapQ.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+          }
+        }
       } catch (dbErr) {
         console.warn("Firestore delete submissions notice:", dbErr);
       }
@@ -899,6 +919,105 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     } catch (error) {
       console.error("Error deleting tugasan umum:", error);
       res.json({ success: true, message: "Tugasan umum dipadam secara tempatan" });
+    }
+  });
+
+  app.post("/api/delete-classroom-assignment", async (req, res) => {
+    try {
+      const { courseId, courseWorkId, qid, kod, email, assignmentTitle } = req.body;
+      const cleanCourseId = (courseId || '').trim();
+      const cleanCourseWorkId = (courseWorkId || '').trim();
+      const cleanQid = (qid || '').trim().toUpperCase();
+      const cleanKod = (kod || '').trim().toUpperCase();
+      const cleanTitle = (assignmentTitle || '').trim().toUpperCase();
+
+      // 1. Delete from inMemorySubmissions
+      for (const [key, val] of inMemorySubmissions.entries()) {
+        const valCourseId = (val.courseId || '').trim();
+        const valCourseWorkId = (val.courseWorkId || '').trim();
+        const valQid = (val.qid || '').trim().toUpperCase();
+        const valKod = (val.kod || '').trim().toUpperCase();
+        const valTugasan = (val.tugasan || '').trim().toUpperCase();
+
+        let match = false;
+        if (cleanCourseId && cleanCourseWorkId && valCourseId === cleanCourseId && valCourseWorkId === cleanCourseWorkId) match = true;
+        else if (cleanCourseWorkId && (valCourseWorkId === cleanCourseWorkId || key.includes(cleanCourseWorkId))) match = true;
+        else if (cleanKod && valKod === cleanKod) match = true;
+        else if (cleanCourseId && cleanQid && valCourseId === cleanCourseId && valQid === cleanQid) match = true;
+        else if (cleanTitle && valTugasan === cleanTitle) match = true;
+
+        if (match) {
+          inMemorySubmissions.delete(key);
+        }
+      }
+
+      // 2. Delete from Firestore submissions collection
+      try {
+        if (cleanCourseId && cleanCourseWorkId) {
+          const snap = await db.collection("submissions")
+            .where("courseId", "==", cleanCourseId)
+            .where("courseWorkId", "==", cleanCourseWorkId)
+            .get();
+          if (snap.docs && snap.docs.length > 0) {
+            await Promise.all(snap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+          }
+        }
+        if (cleanCourseId && cleanQid) {
+          const snap = await db.collection("submissions")
+            .where("courseId", "==", cleanCourseId)
+            .where("qid", "==", cleanQid)
+            .get();
+          if (snap.docs && snap.docs.length > 0) {
+            await Promise.all(snap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+          }
+        }
+        if (cleanKod) {
+          const snap = await db.collection("submissions")
+            .where("kod", "==", cleanKod)
+            .get();
+          if (snap.docs && snap.docs.length > 0) {
+            await Promise.all(snap.docs.map(d => db.collection("submissions").doc(d.id).delete()));
+          }
+        }
+      } catch (dbErr) {
+        console.warn("Firestore delete submissions notice:", dbErr);
+      }
+
+      // 3. Update assignment_status if qid and email exist
+      try {
+        if (cleanQid && email) {
+          const docRef = db.collection("assignment_status").doc(`${cleanQid}_${email}`);
+          const docSnapshot = await docRef.get();
+          if (docSnapshot.exists) {
+            const data = docSnapshot.data();
+            const assignments = data?.assignments || [];
+            const updatedAssignments = assignments.filter((a: any) => 
+              a.courseId !== cleanCourseId && 
+              a.assignmentId !== cleanCourseWorkId && 
+              a.courseWorkId !== cleanCourseWorkId
+            );
+            if (updatedAssignments.length === 0) {
+              await docRef.delete();
+            } else {
+              await docRef.set({
+                ...data,
+                assignments: updatedAssignments,
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: false });
+            }
+          }
+        }
+      } catch (statusErr) {
+        console.warn("Notice updating assignment_status:", statusErr);
+      }
+
+      return res.json({ 
+        success: true, 
+        message: "Tugasan Google Classroom dan rekod markah berjaya dipadam dari sistem." 
+      });
+    } catch (err: any) {
+      console.error("Error in /api/delete-classroom-assignment:", err);
+      res.status(500).json({ error: "Gagal memadam tugasan dari pelayan: " + err.message });
     }
   });
 

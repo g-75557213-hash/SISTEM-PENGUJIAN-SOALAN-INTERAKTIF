@@ -112,12 +112,22 @@ export async function getTeachers(token: string, courseId: string) {
   return data.teachers || [];
 }
 
-export async function deleteAssignment(token: string, courseId: string, courseWorkId: string) {
-  const res = await fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${courseWorkId}`, {
+export async function deleteAssignment(token: string, courseId: string, courseWorkId: string): Promise<boolean> {
+  const res = await fetch(`https://classroom.googleapis.com/v1/courses/${encodeURIComponent(courseId)}/courseWork/${encodeURIComponent(courseWorkId)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) { if (res.status === 401) throw new Error('UNAUTHENTICATED'); throw new Error('Failed to delete assignment'); }
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('UNAUTHENTICATED');
+    if (res.status === 404) {
+      console.warn(`Tugasan ${courseWorkId} tidak ditemui di Google Classroom (kemungkinan telah dipadam secara langsung).`);
+      return true;
+    }
+    const errText = await res.text();
+    console.error('Failed to delete assignment:', errText);
+    throw new Error('Gagal memadam tugasan Google Classroom: ' + errText);
+  }
+  return true;
 }
 
 export async function patchStudentSubmissionGrade(

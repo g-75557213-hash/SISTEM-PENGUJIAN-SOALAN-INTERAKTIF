@@ -275,17 +275,83 @@ export default function BankSoalan({
     }
   };
 
+  // Helper to extract numerical bab for natural ascending sorting (e.g. Bab 1, Bab 2, Bab 10)
+  const extractBabNumber = (babStr?: string): number => {
+    if (!babStr) return 9999;
+    const match = babStr.match(/(?:bab\s*|unit\s*|tema\s*)?(\d+)/i);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    return 9999;
+  };
+
+  // Helper to compare Standard Pembelajaran (SP) naturally from lowest to highest (e.g. 1.1, 1.2, 1.10)
+  const compareSp = (spA?: string, spB?: string): number => {
+    if (!spA && !spB) return 0;
+    if (!spA) return 1;
+    if (!spB) return -1;
+    
+    const numsA = (spA.match(/\d+/g) || []).map(Number);
+    const numsB = (spB.match(/\d+/g) || []).map(Number);
+    
+    const maxLen = Math.max(numsA.length, numsB.length);
+    for (let i = 0; i < maxLen; i++) {
+      const valA = numsA[i] ?? 0;
+      const valB = numsB[i] ?? 0;
+      if (valA !== valB) {
+        return valA - valB;
+      }
+    }
+    return spA.localeCompare(spB, undefined, { numeric: true });
+  };
+
   const filteredQuestions = useMemo(() => {
     return questions.filter(q => {
       const qBab = q.bab?.toLowerCase() || '';
       const s = search.toLowerCase();
-      const matchSearch = qBab.includes(s);
+      const matchSearch = qBab.includes(s) || (q.sp && q.sp.toLowerCase().includes(s));
       const matchSubjek = selectedSubjek ? q.subjek === selectedSubjek : true;
       const matchTingkatan = selectedTingkatan ? q.tingkatan === selectedTingkatan : true;
       
       return matchSearch && matchSubjek && matchTingkatan;
-    }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    });
   }, [questions, search, selectedSubjek, selectedTingkatan]);
+
+  // Group questions by Bab and sort Bab lowest to highest, and questions inside by SP lowest to highest
+  const groupedBabQuestions = useMemo(() => {
+    const map = new Map<string, { babTitle: string; babNumber: number; questions: SoalanData[] }>();
+
+    filteredQuestions.forEach(q => {
+      const rawBab = (q.bab || 'Lain-lain').trim();
+      const babNum = extractBabNumber(rawBab);
+      
+      if (!map.has(rawBab)) {
+        map.set(rawBab, {
+          babTitle: rawBab,
+          babNumber: babNum,
+          questions: []
+        });
+      }
+      map.get(rawBab)!.questions.push(q);
+    });
+
+    // 1. Sort Bab groups from lowest to highest bab number
+    const sortedGroups = Array.from(map.values()).sort((a, b) => {
+      if (a.babNumber !== b.babNumber) return a.babNumber - b.babNumber;
+      return a.babTitle.localeCompare(b.babTitle, undefined, { numeric: true });
+    });
+
+    // 2. Within each Bab group, sort questions by SP from lowest to highest
+    sortedGroups.forEach(group => {
+      group.questions.sort((a, b) => {
+        const spDiff = compareSp(a.sp, b.sp);
+        if (spDiff !== 0) return spDiff;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+    });
+
+    return sortedGroups;
+  }, [filteredQuestions]);
 
   const uniqueSubjek = useMemo(() => {
     const set = new Set<string>();
@@ -578,42 +644,6 @@ export default function BankSoalan({
   return (
     <div className="flex flex-col h-full bg-slate-50 relative z-0 pb-10">
       <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col relative">
-        {/* Banner Mod Direct Link (Tab Sheet1) */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 mb-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 text-white flex items-center justify-center font-bold text-lg shadow-sm border border-white/20 shrink-0">
-              🔗
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-black text-slate-800">Pautan Terus Soalan Sistem (Tab Sheet1)</h3>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider">
-                  Direct Link 100% Berfungsi
-                </span>
-                {questions.some(q => q.linkSoalan && (q.linkSoalan.includes('script.google.com') || q.linkSoalan.includes('storage.googleapis.com'))) && (
-                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                    Perlu Kemas Kini Sheet1
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Semua soalan menggunakan pautan terus aplikasi tanpa kebergantungan storan luar atau sebarang sekat log masuk.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleConvertSheet1ToDirect}
-              disabled={isConvertingDirect}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition cursor-pointer shrink-0"
-              title="Kemas kini semua pautan soalan dalam Sheet1 kepada Direct Link aplikasi"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-200" />
-              <span>{isConvertingDirect ? 'Mengemas Kini...' : '🔗 Tukar Semua Link Sheet1 ke Direct Link'}</span>
-            </button>
-          </div>
-        </div>
 
         <WaygroundSection token={token} classes={classes} spreadsheetId={spreadsheetId} />
         
@@ -700,11 +730,46 @@ export default function BankSoalan({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredQuestions.map(q => {
-                const status = assignmentStatus[q.idSoalan];
-                const isPosted = status?.status === 'posted';
-                return (
+                <div className="space-y-8">
+                  {groupedBabQuestions.map(group => (
+                    <section 
+                      key={group.babTitle} 
+                      className="bg-white/95 border-2 border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all space-y-4"
+                    >
+                      {/* BAB AREA HEADER */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+                            {group.babNumber < 9000 ? `B${group.babNumber}` : '📖'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200/70 tracking-wider">
+                                {group.babNumber < 9000 ? `BAB ${group.babNumber}` : 'TOPIK'}
+                              </span>
+                              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                                {group.babTitle}
+                              </h3>
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                              Disusun mengikut Standard Pembelajaran (SP) terendah ke tertinggi
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 shadow-2xs">
+                            {group.questions.length} Soalan
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* QUESTIONS IN THIS BAB AREA */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {group.questions.map(q => {
+                          const status = assignmentStatus[q.idSoalan];
+                          const isPosted = status?.status === 'posted';
+                          return (
                   <div key={q.idSoalan} className={`rounded-2xl border-2 transition-all duration-300 flex flex-col h-full ${isPosted ? 'border-emerald-500 bg-emerald-50 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'border-slate-200 bg-white shadow-sm hover:border-slate-300'}`}>
                     <div 
                       className="aspect-video w-full bg-slate-100 relative rounded-t-2xl overflow-hidden shrink-0 cursor-pointer group"
@@ -880,7 +945,10 @@ export default function BankSoalan({
                   </div>
                 );
               })}
-            </div>
+                      </div>
+                    </section>
+                  ))}
+                </div>
           )}
         </div>
           </div>

@@ -631,90 +631,55 @@ export default function StudentView({
               Google Classroom • Tugasan Interaktif
             </p>
 
-            {/* If Student chooses Manual Typing Mode */}
-            {isManualInputMode ? (
-              <form onSubmit={handleConfirmManualName} className="space-y-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
-                    Taip Nama Anda <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={manualInputName}
-                    onInput={(e) => {
-                      e.currentTarget.value = e.currentTarget.value.toUpperCase();
-                    }}
-                    onChange={(e) => setManualInputName(e.target.value.toUpperCase())}
-                    style={{
-                      backgroundColor: '#ffffff',
-                      textTransform: 'uppercase'
-                    }}
-                    className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:!text-slate-400 placeholder:!opacity-40 placeholder:!font-normal shadow-xs transition"
-                    placeholder="CONTOH: DANISH ATAU AHMAD"
-                    autoFocus
-                  />
-                  <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                    Jika anda memasukkan nama pendek, guru akan mengesahkan rekod anda di dalam sistem.
-                  </p>
+            {/* Teacher Mode testing banner */}
+            {user && isTeacherEmail(user.email || '') && (
+              <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl text-left text-xs text-indigo-950 space-y-2 mb-3">
+                <div className="flex items-center gap-2 font-black text-indigo-900">
+                  <span className="text-base">👨‍🏫</span> Mod Ujian Guru Dikesan
                 </div>
-
-                {/* Instant Fuzzy Match Preview */}
-                {fuzzyMatchesPreview.length > 0 && (
-                  <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3 space-y-1.5">
-                    <div className="text-[10px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-blue-600" /> Cadangan Padanan Classroom:
-                    </div>
-                    {fuzzyMatchesPreview.map((match, idx) => (
-                      <button
-                        type="button"
-                        key={idx}
-                        onClick={() => {
-                          setManualInputName(match.student.fullName);
-                        }}
-                        className="w-full text-left bg-white hover:bg-blue-100/70 border border-blue-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 flex items-center justify-between transition cursor-pointer"
-                      >
-                        <span className="truncate">{match.student.fullName}</span>
-                        <span className="text-[10px] text-blue-600 font-mono shrink-0 ml-2">Pilih ➔</span>
-                      </button>
+                <p className="text-[11px] text-indigo-800 leading-relaxed">
+                  Anda sedang menggunakan akaun guru ({user.email}). Pilih mana-mana pelajar kelas untuk menguji kuiz:
+                </p>
+                {classRoster.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      const s = classRoster.find(st => st.userId === e.target.value);
+                      if (s) {
+                        selectStudentAccount({
+                          userId: s.userId,
+                          fullName: s.fullName,
+                          email: s.email,
+                          photoUrl: s.photoUrl,
+                          isExactRosterMatch: true
+                        });
+                      }
+                    }}
+                    className="w-full text-xs font-bold p-2.5 border-2 border-indigo-300 rounded-xl bg-white text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                  >
+                    <option value="">-- Pilih Murid Kelas Untuk Mod Ujian --</option>
+                    {classRoster.map(s => (
+                      <option key={s.userId} value={s.userId}>
+                        {s.fullName} ({s.email || 'Tiada e-mel'})
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 )}
+              </div>
+            )}
 
-                <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 px-4 rounded-xl transition shadow-md shadow-blue-600/20 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <span>Mula Menjawab Kuiz</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsManualInputMode(false)}
-                    className="w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
-                  >
-                    Batal & Kembali ke Pengesahan Akaun
-                  </button>
-                </div>
-              </form>
-            ) : isChoosingAccount && moeAccounts.length >= 2 ? (
-              // 1B. Multiple MOE Student Accounts on this Chrome Profile -> Choice Buttons!
-              <div className="space-y-4">
-                <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl text-center">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-2 text-base font-bold shadow-xs">
-                    👥
-                  </div>
-                  <h3 className="font-black text-sm text-slate-800">
-                    Pilihan Akaun Murid DELIMa
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                    Dikesan {moeAccounts.length} akaun murid pada Chrome ini. Sila klik nama murid yang sedang menjawab:
-                  </p>
+            {/* A. GOOGLE ACCOUNTS DETECTED IN CHROME */}
+            {moeAccounts.length > 0 ? (
+              <div className="space-y-2.5 mb-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>👤</span> Pilih Akaun Google Dikesan ({moeAccounts.length}):
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Sedia Dipilih
+                  </span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {moeAccounts.map((acc, idx) => (
                     <button
                       key={acc.email || idx}
@@ -723,7 +688,7 @@ export default function StudentView({
                       className="w-full text-left p-3.5 bg-white hover:bg-emerald-50/80 border-2 border-slate-200 hover:border-emerald-500 rounded-2xl transition shadow-xs group flex items-center justify-between cursor-pointer active:scale-98"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
                           {acc.photoUrl ? (
                             <img src={acc.photoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
                           ) : (
@@ -731,197 +696,110 @@ export default function StudentView({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-emerald-800 truncate">
+                          <div className="font-black text-xs sm:text-sm text-slate-900 group-hover:text-emerald-800 truncate uppercase">
                             {acc.fullName}
                           </div>
-                          <div className="text-[11px] font-mono text-slate-500 truncate">
+                          <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
                             {acc.email}
                           </div>
                         </div>
                       </div>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 ml-2 group-hover:bg-emerald-600 group-hover:text-white transition">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200 shrink-0 ml-2 group-hover:bg-emerald-600 group-hover:text-white transition">
                         Pilih ➔
                       </span>
                     </button>
                   ))}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSignIn}
-                    disabled={isDetectingAccount}
-                    className="w-full py-2.5 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/70 hover:bg-blue-100/70 rounded-xl border border-blue-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>+ Kesan / Log Masuk Akaun MOE Lain</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualInputName('');
-                      setIsManualInputMode(true);
-                    }}
-                    className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
-                  >
-                    Atau Taip Nama Secara Manual
-                  </button>
-                </div>
-              </div>
-            ) : detectedStudent ? (
-              // 1C. Single Detected MOE Student -> Full Profile Card: "Adakah ini nama anda?"
-              <div className="space-y-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 text-center relative overflow-hidden">
-                  <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center shadow-md border-2 border-white">
-                    {detectedStudent.photoUrl ? (
-                      <img 
-                        src={detectedStudent.photoUrl} 
-                        alt={detectedStudent.fullName} 
-                        className="w-full h-full rounded-full object-cover" 
-                      />
-                    ) : (
-                      <span>{detectedStudent.fullName.slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </div>
-
-                  {/* Directly Written Official Full Name */}
-                  <div className="text-base sm:text-lg font-black text-slate-900 leading-snug px-2">
-                    {detectedStudent.fullName}
-                  </div>
-
-                  <div className="mt-1 text-xs text-slate-500 font-mono">
-                    {detectedStudent.email}
-                  </div>
-                  {courseName && (
-                    <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-blue-700">
-                      <School className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{courseName}</span>
-                    </div>
-                  )}
-
-                  <div className="mt-4 pt-3 border-t border-slate-200/80">
-                    <p className="text-sm font-extrabold text-slate-700">
-                      Adakah ini nama anda?
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2.5 pt-1">
-                  <button
-                    onClick={handleConfirmDetectedStudent}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-600/25 text-base flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>Pasti</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setManualInputName('');
-                      setIsManualInputMode(true);
-                    }}
-                    className="w-full bg-white hover:bg-slate-50 text-slate-700 font-extrabold py-3 px-4 rounded-xl border border-slate-300 hover:border-slate-400 transition text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <Edit3 className="w-4 h-4 text-slate-500" />
-                    <span>Taip Manual</span>
-                  </button>
-                </div>
-
-                {/* Account Switch Helpers */}
-                <div className="pt-2 text-center flex flex-col gap-1.5">
-                  {moeAccounts.length > 1 && (
-                    <button
-                      onClick={() => {
-                        setDetectedStudent(null);
-                        setIsChoosingAccount(true);
-                      }}
-                      className="text-xs font-bold text-blue-600 hover:text-blue-800 transition"
-                    >
-                      ⇄ Tukar ke akaun murid lain ({moeAccounts.length} akaun)
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      await logout();
-                      await handleSignIn();
-                    }}
-                    className="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition underline"
-                  >
-                    Bukan anda? Kesan akaun Google Chrome lain
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleSignIn}
+                  disabled={isDetectingAccount}
+                  className="w-full py-2 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/60 hover:bg-blue-100/60 rounded-xl border border-blue-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="w-3.5 h-3.5" />
+                  <span>{isDetectingAccount ? "Menyemak Akaun..." : "+ Kesan / Log Masuk Akaun Google Lain"}</span>
+                </button>
               </div>
             ) : (
-              // 1D. No Student Account detected yet -> Prompt Login or Manual Input
-              <div className="space-y-4 text-center">
-                {user && isTeacherEmail(user.email || '') && (
-                  <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl text-left text-xs text-indigo-950 space-y-2 mb-2">
-                    <div className="flex items-center gap-2 font-black text-indigo-900">
-                      <span className="text-base">👨‍🏫</span> Mod Guru Dikesan
-                    </div>
-                    <p className="text-[11px] text-indigo-800 leading-relaxed">
-                      Anda sedang log masuk akaun guru ({user.email}). Untuk menguji kuiz sebagai murid, anda boleh memilih mana-mana pelajar kelas:
-                    </p>
-                    {classRoster.length > 0 && (
-                      <select
-                        onChange={(e) => {
-                          const s = classRoster.find(st => st.userId === e.target.value);
-                          if (s) {
-                            selectStudentAccount({
-                              userId: s.userId,
-                              fullName: s.fullName,
-                              email: s.email,
-                              photoUrl: s.photoUrl,
-                              isExactRosterMatch: true
-                            });
-                          }
-                        }}
-                        className="w-full text-xs font-bold p-2.5 border-2 border-indigo-300 rounded-xl bg-white text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
-                      >
-                        <option value="">-- Pilih Murid Kelas Untuk Mod Ujian --</option>
-                        {classRoster.map(s => (
-                          <option key={s.userId} value={s.userId}>
-                            {s.fullName} ({s.email || 'Tiada e-mel'})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
-
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Sistem bersedia menyemak akaun murid Google Classroom di Chrome anda. Sila pilih kaedah untuk meneruskan:
-                  </p>
-                </div>
-
-                <div className="space-y-2.5">
-                  <button
-                    onClick={handleSignIn}
-                    disabled={isDetectingAccount}
-                    className="w-full bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 font-extrabold py-3.5 px-4 rounded-xl transition shadow-xs text-sm flex items-center justify-center gap-2.5 cursor-pointer active:scale-98"
-                  >
-                    <img 
-                      src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-                      alt="Google" 
-                      className="w-4 h-4" 
-                    />
-                    <span>{isDetectingAccount ? "Menyemak Akaun..." : "Kesan Akaun Murid MOE (Chrome)"}</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setManualInputName('');
-                      setIsManualInputMode(true);
-                    }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-3 px-4 rounded-xl transition shadow-md shadow-blue-600/20 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Taip Nama Secara Manual</span>
-                  </button>
-                </div>
+              <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+                <p className="text-xs text-slate-600 leading-relaxed font-medium mb-2.5">
+                  Tiada akaun Google murid dikesan secara automatik di Chrome ini.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSignIn}
+                  disabled={isDetectingAccount}
+                  className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-xs transition cursor-pointer"
+                >
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="w-3.5 h-3.5" />
+                  <span>{isDetectingAccount ? "Menyemak Akaun..." : "Kesan Akaun Google (Chrome)"}</span>
+                </button>
               </div>
             )}
+
+            {/* B. DIVIDER */}
+            <div className="relative my-4 flex items-center justify-center">
+              <div className="border-t border-slate-200 w-full"></div>
+              <span className="bg-white px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 absolute">
+                ATAU MASUKKAN NAMA MANUAL
+              </span>
+            </div>
+
+            {/* C. MANUAL INPUT FIELD */}
+            <form onSubmit={handleConfirmManualName} className="space-y-3">
+              <div>
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-1.5">
+                  NAMA PELAJAR <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={manualInputName}
+                  onInput={(e) => {
+                    e.currentTarget.value = e.currentTarget.value.toUpperCase();
+                  }}
+                  onChange={(e) => setManualInputName(e.target.value.toUpperCase())}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    textTransform: 'uppercase'
+                  }}
+                  className="w-full px-4 py-3 text-sm font-extrabold border-2 border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none uppercase placeholder:!text-slate-400 placeholder:!opacity-40 placeholder:!font-normal shadow-xs transition"
+                  placeholder="CONTOH: AHMAD BIN ABDULLAH"
+                />
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  Jika nama pendek dimasukkan, markah terus direkodkan dan disahkan oleh guru.
+                </p>
+              </div>
+
+              {fuzzyMatchesPreview.length > 0 && (
+                <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-2.5 space-y-1">
+                  <div className="text-[10px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-blue-600" /> Cadangan Padanan Kelas:
+                  </div>
+                  {fuzzyMatchesPreview.map((match, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => setManualInputName(match.student.fullName)}
+                      className="w-full text-left bg-white hover:bg-blue-100/70 border border-blue-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 flex items-center justify-between transition cursor-pointer"
+                    >
+                      <span className="truncate">{match.student.fullName}</span>
+                      <span className="text-[10px] text-blue-600 font-mono shrink-0 ml-1">Pilih ➔</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={!manualInputName.trim()}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-black py-3 px-4 rounded-xl transition shadow-md shadow-blue-600/20 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <span>Sahkan & Mula Menjawab Kuiz</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
           </div>
         </div>
       );
@@ -1075,27 +953,6 @@ export default function StudentView({
               <span className="font-mono text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 text-emerald-900 shadow-xs">
                 {currentKod}
               </span>
-            </div>
-          )}
-
-          {moeAccounts.length > 0 && (
-            <div className="mb-3.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1.5">
-              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                <span>👤</span> Akaun Murid MOE Dikesan di Chrome:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {moeAccounts.map((acc, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPublicNama(acc.fullName.toUpperCase())}
-                    className="text-xs font-extrabold bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer flex items-center gap-1 active:scale-95"
-                  >
-                    <span>{acc.fullName}</span>
-                    <span className="text-[10px] text-emerald-600 font-mono">({acc.email})</span>
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 

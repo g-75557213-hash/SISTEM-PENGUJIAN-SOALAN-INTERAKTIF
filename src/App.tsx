@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, AlertCircle, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube } from 'lucide-react';
 import { initAuth, googleSignIn, logout, getAccessToken } from './lib/firebase';
 import { User } from 'firebase/auth';
-import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets } from './lib/sheets';
+import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets, convertAllSheet1LinksToDirect } from './lib/sheets';
 import { SENARAI_SUBJEK, getSenaraiBab, generateSPOptions } from './lib/kssmData';
 import { getClasses, createAssignment, GCClass } from './lib/classroom';
 import { uploadFileToDrive } from './lib/drive';
@@ -109,7 +109,7 @@ export default function App() {
   
   const [htmlCode, setHtmlCode] = useState('');
   const [previewHtml, setPreviewHtml] = useState('');
-  const [numQuestions, setNumQuestions] = useState(5);
+  const [numQuestions, setNumQuestions] = useState<number | string>(5);
   
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | 'fullscreen'>('desktop');
   const [previewHeight, setPreviewHeight] = useState<number>(650);
@@ -122,6 +122,7 @@ export default function App() {
   const [videoUrl, setVideoUrl] = useState('');
   const [questionVideoLink, setQuestionVideoLink] = useState('');
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [isConvertingDirect, setIsConvertingDirect] = useState(false);
 
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -285,7 +286,8 @@ export default function App() {
     const kriteriaTambahan = promptKriteria.trim() ? `\nKRITERIA GURU (SANGAT PENTING - ANDA WAJIB IKUTI):\n${promptKriteria}\n` : '';
     const videoPrompt = videoUrl ? `\n\nSILA MASUKKAN VIDEO INI SEBAGAI RUJUKAN DI DALAM APLIKASI (Contohnya di bahagian tepi atau atas aplikasi):\n<video src="${videoUrl}" controls width="100%"></video>\nPastikan video ini berfungsi.\n` : '';
     const extVideoPrompt = questionVideoLink.trim() ? `\n\nSILA GUNAKAN PAUTAN VIDEO INI [${questionVideoLink}] SEBAGAI RUJUKAN ATAU PENGENALAN DI DALAM APLIKASI. Anda boleh memaparkannya menggunakan iframe atau menggunakannya sebagai konteks untuk soalan.\n` : '';
-    const nyawa = Math.ceil(numQuestions / 2);
+    const parsedNumQuestions = typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5);
+    const nyawa = Math.max(1, Math.ceil(parsedNumQuestions / 2));
 
     const prompt = `Bertindak sebagai Pakar Pembangun Web Interaktif Pendidikan (Gamified Learning). Tugas anda adalah membina aplikasi kuiz/soalan interaktif berasaskan web (single-file HTML) menggunakan HTML, Tailwind CSS, dan JavaScript yang SANGAT MENARIK, ESTETIK, DAN FUNGSIONAL.
 
@@ -302,8 +304,8 @@ KRITERIA WAJIB:
 - **Tema Beridentiti:** Setiap set soalan mempunyai reka bentuk visual (tema warna, susun atur) yang unik mengikut topik (cth: Fizik - Kosmik, Matematik - Retro).
 - **Audio (Web Audio API):** WAJIB guna Web Audio API untuk mensintesis muzik latar (synthesia) yang sedap didengar, menenangkan (lo-fi/ambient/pad) secara berulang (loop) dengan kelantangan perlahan. JANGAN guna link audio/mp3 luar! Hasilkan kord/melodi sintesis yang merdu menggunakan gabungan oscillator (sine/triangle). Sertakan juga bunyi Sfx untuk jawapan betul/salah. Sediakan butang Mute/Unmute.
 - **Animasi Penuh:** Wajib ada animasi masuk/keluar yang menyeluruh bagi setiap elemen UI, menggunakan CSS animasi keyframes atau RequestAnimationFrame.
-- **Nyawa:** Memandangkan ada ${numQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️. Jika salah, tolak 1 nyawa.
-- **Bilangan Soalan:** Cipta TEPAT ${numQuestions} soalan berperingkat.
+- **Nyawa:** Memandangkan ada ${parsedNumQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️. Jika salah, tolak 1 nyawa.
+- **Bilangan Soalan:** Cipta TEPAT ${parsedNumQuestions} soalan berperingkat.
 - **Dwibahasa:** Arahan paparan dalam Bahasa Melayu (tebal) dan terjemahan Bahasa Inggeris (condong).
 
 KRITERIA KHAS:${kriteriaTambahan}${videoPrompt}${extVideoPrompt}
@@ -349,6 +351,26 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
     navigator.clipboard.writeText(prompt);
     alert('Prompt berjaya disalin! Anda boleh tampal (Paste) prompt ini ke Google Gemini.');
     setShowPromptModal(false);
+  };
+
+  const handleConvertSheet1ToDirect = async () => {
+    if (!token) {
+      alert("Sila pastikan akaun Google anda aktif untuk mengemas kini tab Sheet1.");
+      return;
+    }
+    setIsConvertingDirect(true);
+    try {
+      const res = await convertAllSheet1LinksToDirect(token, spreadsheetId);
+      if (token && spreadsheetId) {
+        await loadData(token, spreadsheetId);
+      }
+      alert(`⚡ Berjaya! ${res.message}\nSemua pautan soalan dalam tab Sheet1 kini menggunakan Direct Link.`);
+    } catch (err: any) {
+      console.error(err);
+      alert("Ralat semasa menukar pautan di Sheet1: " + (err.message || err));
+    } finally {
+      setIsConvertingDirect(false);
+    }
   };
 
   const handlePreview = () => {
@@ -1350,21 +1372,9 @@ function syncClassroom() {
               <div className="text-sm font-semibold text-slate-700 leading-tight">Ruangan Kod<br/>HTML</div>
             </div>
             
-            <div className="flex items-center gap-1.5">
-              <div className="text-[10px] font-medium text-slate-500 leading-tight text-right">Bil.<br/>Soalan:</div>
-              <input 
-                type="number" 
-                value={numQuestions}
-                onChange={(e) => setNumQuestions(Number(e.target.value))}
-                className="w-10 h-8 border border-slate-200 rounded text-center text-sm focus:border-blue-500 outline-none"
-                min="1"
-                max="20"
-              />
-            </div>
-            
             <button 
               onClick={() => setShowPromptModal(true)}
-              className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 hover:opacity-90 text-white px-3 py-1.5 rounded-md flex items-center transition shadow-sm"
+              className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 hover:opacity-90 text-white px-3.5 py-1.5 rounded-lg flex items-center transition shadow-sm cursor-pointer"
             >
               <span className="mr-1.5 text-xs opacity-90">💡</span>
               <div className="text-xs font-bold leading-tight text-left">Prompt<br/>Gemini</div>
@@ -1963,6 +1973,46 @@ function syncClassroom() {
             </div>
             <div className="p-6">
               <div className="space-y-4">
+                {/* Bilangan Soalan */}
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <span className="text-base">🔢</span> Bilangan Soalan
+                    </label>
+                    <span className="text-xs font-semibold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full">
+                      Cadangan: 1 - 20 Soalan
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mb-3">
+                    Tentukan jumlah soalan yang ingin dicipta oleh Gemini AI. Sistem akan mengira bilangan soalan dan bilangan nyawa secara automatik dalam prompt.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number"
+                      value={numQuestions}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setNumQuestions('');
+                        } else {
+                          const parsed = parseInt(val, 10);
+                          setNumQuestions(isNaN(parsed) ? '' : Math.max(1, parsed));
+                        }
+                      }}
+                      placeholder="5"
+                      min="1"
+                      max="50"
+                      className="w-24 h-11 border-2 border-blue-300 rounded-xl text-center text-base font-black text-slate-900 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition shadow-xs"
+                    />
+                    <div className="text-xs text-slate-600 font-medium">
+                      <span className="font-bold text-slate-800">soalan</span> &bull; Pelajar akan diperuntukkan{' '}
+                      <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                        ❤️ {Math.max(1, Math.ceil((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 2))} Nyawa
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
                     Ciri-ciri & Kriteria Soalan (Pilihan)
@@ -2303,6 +2353,34 @@ function syncClassroom() {
                   className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition shrink-0 self-stretch md:self-auto text-center"
                 >
                   Buka Mod Semakan ↗
+                </button>
+              </div>
+
+              {/* Migrasi Direct Link Tab Sheet1 */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+                    🔗
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-emerald-950 text-sm">Penyelarasan Direct Link (Tab Sheet1)</h3>
+                      <span className="bg-emerald-200/80 text-emerald-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                        100% Berfungsi
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+                      Tukar semua pautan lama soalan dalam Tab Sheet1 Google Spreadsheet kepada Direct Link sistem (tanpa sekatan storan luar).
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleConvertSheet1ToDirect}
+                  disabled={isConvertingDirect}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition shrink-0 self-stretch md:self-auto text-center flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                  <span>{isConvertingDirect ? 'Mengemas Kini...' : 'Tukar Semua Link Sheet1 ke Direct Link'}</span>
                 </button>
               </div>
 
