@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { googleSignIn, initAuth, logout, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { LogOut, UserCheck, CheckCircle2, Edit3, ArrowRight, ShieldCheck, AlertCircle, School, Hash, RefreshCw, KeyRound, Sparkles, Users } from 'lucide-react';
@@ -71,6 +71,7 @@ export default function StudentView({
   const [moeAccounts, setMoeAccounts] = useState<MoeAccount[]>([]);
   const [isChoosingAccount, setIsChoosingAccount] = useState<boolean>(false);
   const [isDetectingAccount, setIsDetectingAccount] = useState<boolean>(false);
+  const autoDetectAttemptedRef = useRef(false);
 
   const isTeacherEmail = (email: string) => {
     const e = (email || '').toLowerCase().trim();
@@ -215,30 +216,50 @@ export default function StudentView({
       }
     }
 
-    // Enrich stored accounts with classRoster details
-    const enriched = stored.map(acc => {
-      const rMatch = classRoster.find(s => s.email && s.email.toLowerCase() === acc.email.toLowerCase()) ||
-                     classRoster.find(s => normalize(s.fullName) === normalize(acc.fullName));
-      if (rMatch) {
-        return {
-          ...acc,
-          fullName: rMatch.fullName,
-          userId: rMatch.userId,
-          photoUrl: acc.photoUrl || rMatch.photoUrl,
-          isExactRosterMatch: true
-        };
-      }
-      return acc;
+    // Map roster students into selectable accounts
+    const rosterAccounts: MoeAccount[] = classRoster.map(s => ({
+      email: s.email || '',
+      fullName: s.fullName,
+      userId: s.userId,
+      photoUrl: s.photoUrl,
+      isExactRosterMatch: true
+    }));
+
+    const combinedMap = new Map<string, MoeAccount>();
+
+    // Add stored accounts
+    stored.forEach(acc => {
+      const key = (acc.email || acc.fullName).toLowerCase();
+      combinedMap.set(key, acc);
     });
 
-    const sorted = sortAccountsWithMoePriority(enriched);
+    // Add roster accounts
+    rosterAccounts.forEach(acc => {
+      const key = (acc.email || acc.fullName).toLowerCase();
+      if (!combinedMap.has(key)) {
+        combinedMap.set(key, acc);
+      } else {
+        const existing = combinedMap.get(key)!;
+        combinedMap.set(key, {
+          ...existing,
+          email: acc.email || existing.email,
+          fullName: acc.fullName || existing.fullName,
+          photoUrl: acc.photoUrl || existing.photoUrl,
+          userId: acc.userId || existing.userId,
+          isExactRosterMatch: true
+        });
+      }
+    });
+
+    const allAccounts = Array.from(combinedMap.values());
+    const sorted = sortAccountsWithMoePriority(allAccounts);
     setMoeAccounts(sorted);
 
     const activeEmail = (user?.email || '').toLowerCase().trim();
     const activeIsTeacher = isTeacherEmail(activeEmail);
 
     if (user && !activeIsTeacher) {
-      // Current active Chrome user is a student: write their name directly!
+      // Current active Chrome user is a student: direct to quiz!
       const matched = sorted.find(a => a.email.toLowerCase() === activeEmail) || {
         email: activeEmail,
         fullName: (user.displayName || activeEmail.split('@')[0]).toUpperCase(),
@@ -248,19 +269,39 @@ export default function StudentView({
       };
       setDetectedStudent(matched);
       setIsChoosingAccount(false);
+      setConfirmedStudent({
+        userId: matched.userId || user.uid,
+        nama: matched.fullName,
+        email: matched.email || activeEmail,
+        matchedClassroomName: matched.fullName,
+        matchedStudentId: matched.userId || user.uid,
+        verificationStatus: 'verified'
+      });
     } else {
       // Active user is teacher or not logged in
       if (sorted.length === 1 && isMoeAccount(sorted[0].email)) {
-        // Exactly 1 MOE student account found on Chrome: select it
-        setDetectedStudent(sorted[0]);
+        const singleAcc = sorted[0];
+        setDetectedStudent(singleAcc);
         setIsChoosingAccount(false);
+        setConfirmedStudent({
+          userId: singleAcc.userId || '',
+          nama: singleAcc.fullName,
+          email: singleAcc.email || '',
+          matchedClassroomName: singleAcc.fullName,
+          matchedStudentId: singleAcc.userId || '',
+          verificationStatus: 'verified'
+        });
       } else if (sorted.length >= 1) {
-        // Accounts available: let student choose
         setDetectedStudent(null);
         setIsChoosingAccount(true);
       } else {
         setDetectedStudent(null);
         setIsChoosingAccount(false);
+        // Auto trigger detection if empty
+        if (!autoDetectAttemptedRef.current) {
+          autoDetectAttemptedRef.current = true;
+          handleSignIn();
+        }
       }
     }
   }, [user, classRoster, isGCMode]);
@@ -497,10 +538,18 @@ export default function StudentView({
         const sorted = sortAccountsWithMoePriority(stored);
         setMoeAccounts(sorted);
 
-        // Select account directly
+        // Select account directly and launch interactive quiz
         setDetectedStudent(studentAcc);
         setIsChoosingAccount(false);
         setIsManualInputMode(false);
+        setConfirmedStudent({
+          userId: studentAcc.userId || res.user.uid,
+          nama: studentAcc.fullName,
+          email: studentAcc.email || uEmail,
+          matchedClassroomName: studentAcc.fullName,
+          matchedStudentId: studentAcc.userId || res.user.uid,
+          verificationStatus: 'verified'
+        });
       }
     } catch (err: any) {
       console.error(err);
@@ -516,6 +565,14 @@ export default function StudentView({
     setDetectedStudent(account);
     setIsChoosingAccount(false);
     setIsManualInputMode(false);
+    setConfirmedStudent({
+      userId: account.userId || '',
+      nama: account.fullName,
+      email: account.email || '',
+      matchedClassroomName: account.fullName,
+      matchedStudentId: account.userId || '',
+      verificationStatus: 'verified'
+    });
   };
 
   // Google Classroom: Student clicks "Pasti" (Identity confirmed)
@@ -761,19 +818,14 @@ export default function StudentView({
                 </button>
               </div>
             ) : (
-              <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-center">
-                <p className="text-xs text-slate-600 leading-relaxed font-medium mb-2.5">
-                  Tiada akaun Google murid dikesan secara automatik di Chrome ini.
+              <div className="mb-4 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-center flex flex-col items-center justify-center gap-2 shadow-2xs">
+                <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs text-emerald-950 font-extrabold">
+                  Sedang Mengesan Akaun Google Chrome...
                 </p>
-                <button
-                  type="button"
-                  onClick={handleSignIn}
-                  disabled={isDetectingAccount}
-                  className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-xs transition cursor-pointer"
-                >
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="w-3.5 h-3.5" />
-                  <span>{isDetectingAccount ? "Menyemak Akaun..." : "Kesan Akaun Google (Chrome)"}</span>
-                </button>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Sistem mengesan akaun murid secara automatik tanpa perlu menekan butang.
+                </p>
               </div>
             )}
 
