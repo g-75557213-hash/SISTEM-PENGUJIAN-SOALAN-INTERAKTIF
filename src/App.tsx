@@ -1960,164 +1960,167 @@ function syncClassroom() {
       {/* ADMIN CONFIG MODAL */}
       {/* Gemini Prompt Modal */}
       {showPromptModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[90]">
+          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-slate-200 my-auto">
             <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="text-white font-bold text-lg flex items-center">
                 <span className="mr-2">💡</span>
                 Tetapan Prompt Gemini
               </h3>
-              <button onClick={() => setShowPromptModal(false)} className="text-white/80 hover:text-white transition">
+              <button 
+                onClick={() => setShowPromptModal(false)} 
+                className="text-white/80 hover:text-white transition p-1 hover:bg-white/10 rounded-lg cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Bilangan Soalan */}
-                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      <span className="text-base">🔢</span> Bilangan Soalan
-                    </label>
-                    <span className="text-xs font-semibold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full">
-                      Cadangan: 1 - 20 Soalan
+
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+              {/* Bilangan Soalan */}
+              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <span className="text-base">🔢</span> Bilangan Soalan
+                  </label>
+                  <span className="text-xs font-semibold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full">
+                    Cadangan: 1 - 20 Soalan
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mb-3">
+                  Tentukan jumlah soalan yang ingin dicipta oleh Gemini AI. Sistem akan mengira bilangan soalan dan bilangan nyawa secara automatik dalam prompt.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="number"
+                    value={numQuestions}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setNumQuestions('');
+                      } else {
+                        const parsed = parseInt(val, 10);
+                        setNumQuestions(isNaN(parsed) ? '' : Math.max(1, parsed));
+                      }
+                    }}
+                    placeholder="5"
+                    min="1"
+                    max="50"
+                    className="w-24 h-11 border-2 border-blue-300 rounded-xl text-center text-base font-black text-slate-900 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition shadow-xs"
+                  />
+                  <div className="text-xs text-slate-600 font-medium">
+                    <span className="font-bold text-slate-800">soalan</span> &bull; Pelajar akan diperuntukkan{' '}
+                    <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                      ❤️ {Math.max(1, Math.ceil((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 2))} Nyawa
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mb-3">
-                    Tentukan jumlah soalan yang ingin dicipta oleh Gemini AI. Sistem akan mengira bilangan soalan dan bilangan nyawa secara automatik dalam prompt.
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <input 
-                      type="number"
-                      value={numQuestions}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === '') {
-                          setNumQuestions('');
-                        } else {
-                          const parsed = parseInt(val, 10);
-                          setNumQuestions(isNaN(parsed) ? '' : Math.max(1, parsed));
-                        }
-                      }}
-                      placeholder="5"
-                      min="1"
-                      max="50"
-                      className="w-24 h-11 border-2 border-blue-300 rounded-xl text-center text-base font-black text-slate-900 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition shadow-xs"
-                    />
-                    <div className="text-xs text-slate-600 font-medium">
-                      <span className="font-bold text-slate-800">soalan</span> &bull; Pelajar akan diperuntukkan{' '}
-                      <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                        ❤️ {Math.max(1, Math.ceil((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 2))} Nyawa
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    Ciri-ciri & Kriteria Soalan (Pilihan)
-                  </label>
-                  <p className="text-xs text-slate-500 mb-2">
-                    Terangkan jenis latihan yang anda mahukan (contoh: "Soalan jenis seret dan lepas, berikan tema lautan, jadikan teks besar dan mudah dibaca"). Kriteria ini akan dimasukkan ke dalam prompt.
-                  </p>
-                  <textarea
-                    value={promptKriteria}
-                    onChange={(e) => setPromptKriteria(e.target.value)}
-                    placeholder="Contoh: Saya mahukan tema angkasa lepas. Jenis latihan adalah padankan perkataan..."
-                    className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:border-blue-500 focus:ring focus:ring-blue-200 outline-none transition"
-                    rows={4}
-                  />
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    Muat Naik Video (Pilihan)
-                  </label>
-                  <p className="text-xs text-slate-500 mb-2">
-                    Muat naik video sebagai rujukan atau panduan bagi jawapan (seperti eksperimen), video ini akan diintegrasikan ke dalam soalan.
-                  </p>
-                  
-                  {!driveFolderLink ? (
-                    <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 italic">
-                      Sila masukkan Pautan Folder Google Drive di ruangan Admin terlebih dahulu untuk menggunakan fungsi muat naik video.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <input 
-                        type="file" 
-                        accept="video/*"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setVideoFile(e.target.files[0]);
-                            setVideoUrl(''); // reset if new file selected
-                          }
-                        }}
-                        className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      
-                      {videoFile && !videoUrl && (
-                        <button
-                          onClick={async () => {
-                            if (!token) return alert('Sila log masuk dahulu');
-                            if (!driveFolderLink) return alert('Sila masukkan pautan folder Google Drive di ruangan admin');
-                            
-                            setIsUploadingVideo(true);
-                            try {
-                              const url = await uploadFileToDrive(token, videoFile, driveFolderLink);
-                              setVideoUrl(url);
-                              alert('Video berjaya dimuat naik ke Google Drive!');
-                            } catch (err: any) {
-                              console.error(err);
-                              alert(err.message || 'Ralat muat naik');
-                            }
-                            setIsUploadingVideo(false);
-                          }}
-                          disabled={isUploadingVideo}
-                          className="self-start text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-4 rounded-lg disabled:opacity-50"
-                        >
-                          {isUploadingVideo ? 'Memuat naik...' : 'Upload ke Drive'}
-                        </button>
-                      )}
-                      
-                      {videoUrl && (
-                        <div className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                          ✓ Berjaya dimuat naik
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                    <Youtube className="w-4 h-4 text-red-500" /> Pautan Video (YouTube / Link Luar)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Tampal pautan video di sini..."
-                    value={questionVideoLink}
-                    onChange={(e) => setQuestionVideoLink(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500 outline-none"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1.5 italic">Pautan ini akan disertakan dalam prompt untuk rujukan penjanaan soalan.</p>
-                </div>
-                
-                <div className="flex gap-3 pt-2">
-                  <button 
-                    onClick={() => setShowPromptModal(false)}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition border border-slate-200"
-                  >
-                    Batal
-                  </button>
-                  <button 
-                    onClick={handleCopyPrompt}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center transition shadow-md"
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Salin Prompt Gemini
-                  </button>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Ciri-ciri & Kriteria Soalan (Pilihan)
+                </label>
+                <p className="text-xs text-slate-500 mb-2">
+                  Terangkan jenis latihan yang anda mahukan (contoh: "Soalan jenis seret dan lepas, berikan tema lautan, jadikan teks besar dan mudah dibaca"). Kriteria ini akan dimasukkan ke dalam prompt.
+                </p>
+                <textarea
+                  value={promptKriteria}
+                  onChange={(e) => setPromptKriteria(e.target.value)}
+                  placeholder="Contoh: Saya mahukan tema angkasa lepas. Jenis latihan adalah padankan perkataan..."
+                  className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:border-blue-500 focus:ring focus:ring-blue-200 outline-none transition"
+                  rows={4}
+                />
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Muat Naik Video (Pilihan)
+                </label>
+                <p className="text-xs text-slate-500 mb-2">
+                  Muat naik video sebagai rujukan atau panduan bagi jawapan (seperti eksperimen), video ini akan diintegrasikan ke dalam soalan.
+                </p>
+                
+                {!driveFolderLink ? (
+                  <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded border border-amber-200 italic">
+                    Sila masukkan Pautan Folder Google Drive di ruangan Admin terlebih dahulu untuk menggunakan fungsi muat naik video.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <input 
+                      type="file" 
+                      accept="video/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setVideoFile(e.target.files[0]);
+                          setVideoUrl(''); // reset if new file selected
+                        }
+                      }}
+                      className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    
+                    {videoFile && !videoUrl && (
+                      <button
+                        onClick={async () => {
+                          if (!token) return alert('Sila log masuk dahulu');
+                          if (!driveFolderLink) return alert('Sila masukkan pautan folder Google Drive di ruangan admin');
+                          
+                          setIsUploadingVideo(true);
+                          try {
+                            const url = await uploadFileToDrive(token, videoFile, driveFolderLink);
+                            setVideoUrl(url);
+                            alert('Video berjaya dimuat naik ke Google Drive!');
+                          } catch (err: any) {
+                            console.error(err);
+                            alert(err.message || 'Ralat muat naik');
+                          }
+                          setIsUploadingVideo(false);
+                        }}
+                        disabled={isUploadingVideo}
+                        className="self-start text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-4 rounded-lg disabled:opacity-50"
+                      >
+                        {isUploadingVideo ? 'Memuat naik...' : 'Upload ke Drive'}
+                      </button>
+                    )}
+                    
+                    {videoUrl && (
+                      <div className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                        ✓ Berjaya dimuat naik
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <Youtube className="w-4 h-4 text-red-500" /> Pautan Video (YouTube / Link Luar)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Tampal pautan video di sini..."
+                  value={questionVideoLink}
+                  onChange={(e) => setQuestionVideoLink(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                />
+                <p className="text-[10px] text-slate-500 mt-1.5 italic">Pautan ini akan disertakan dalam prompt untuk rujukan penjanaan soalan.</p>
+              </div>
+            </div>
+
+            {/* Pinned Bottom Footer Action Buttons */}
+            <div className="shrink-0 p-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+              <button 
+                onClick={() => setShowPromptModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200/70 transition border border-slate-300 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleCopyPrompt}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-95 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center transition shadow-md cursor-pointer"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Salin Prompt Gemini
+              </button>
             </div>
           </div>
         </div>

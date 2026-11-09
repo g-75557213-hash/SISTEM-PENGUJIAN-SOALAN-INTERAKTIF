@@ -77,6 +77,23 @@ export default function StudentView({
     return e.startsWith('g-') || e.includes('guru');
   };
 
+  const isMoeAccount = (email?: string) => {
+    const e = (email || '').toLowerCase().trim();
+    return e.includes('@moe-dl.edu.my') || e.includes('@moe.edu.my') || e.startsWith('m-');
+  };
+
+  const sortAccountsWithMoePriority = (accounts: MoeAccount[]): MoeAccount[] => {
+    return [...accounts].sort((a, b) => {
+      const aIsMoe = isMoeAccount(a.email);
+      const bIsMoe = isMoeAccount(b.email);
+      if (aIsMoe && !bIsMoe) return -1;
+      if (!aIsMoe && bIsMoe) return 1;
+      if (a.isExactRosterMatch && !b.isExactRosterMatch) return -1;
+      if (!a.isExactRosterMatch && b.isExactRosterMatch) return 1;
+      return (a.fullName || '').localeCompare(b.fullName || '');
+    });
+  };
+
   const getStoredMoeAccounts = (): MoeAccount[] => {
     try {
       const raw = localStorage.getItem('known_moe_student_accounts');
@@ -94,7 +111,7 @@ export default function StudentView({
       const cleanEmail = (account.email || '').toLowerCase().trim();
       if (!cleanEmail) return;
       const filtered = current.filter(a => (a.email || '').toLowerCase().trim() !== cleanEmail);
-      const updated = [account, ...filtered].slice(0, 8);
+      const updated = [account, ...filtered].slice(0, 12);
       localStorage.setItem('known_moe_student_accounts', JSON.stringify(updated));
     } catch (e) {}
   };
@@ -174,14 +191,12 @@ export default function StudentView({
 
     let stored = getStoredMoeAccounts();
 
-    // If active user is signed in
+    // If active user is signed in, record their account
     if (user) {
       const userEmail = (user.email || '').toLowerCase().trim();
       const userDisplay = (user.displayName || '').trim().toUpperCase();
-      const isTeacher = isTeacherEmail(userEmail);
 
-      // Only save if it is an actual student account (not a teacher)
-      if (!isTeacher && userEmail) {
+      if (userEmail) {
         let matched = classRoster.find(s => s.email && s.email.toLowerCase() === userEmail);
         if (!matched && userDisplay) {
           matched = classRoster.find(s => normalize(s.fullName) === normalize(userDisplay));
@@ -216,14 +231,15 @@ export default function StudentView({
       return acc;
     });
 
-    setMoeAccounts(enriched);
+    const sorted = sortAccountsWithMoePriority(enriched);
+    setMoeAccounts(sorted);
 
     const activeEmail = (user?.email || '').toLowerCase().trim();
     const activeIsTeacher = isTeacherEmail(activeEmail);
 
     if (user && !activeIsTeacher) {
       // Current active Chrome user is a student: write their name directly!
-      const matched = enriched.find(a => a.email.toLowerCase() === activeEmail) || {
+      const matched = sorted.find(a => a.email.toLowerCase() === activeEmail) || {
         email: activeEmail,
         fullName: (user.displayName || activeEmail.split('@')[0]).toUpperCase(),
         userId: user.uid,
@@ -234,12 +250,12 @@ export default function StudentView({
       setIsChoosingAccount(false);
     } else {
       // Active user is teacher or not logged in
-      if (enriched.length === 1) {
-        // Exactly 1 student MOE account found on Chrome: write it directly for confirmation!
-        setDetectedStudent(enriched[0]);
+      if (sorted.length === 1 && isMoeAccount(sorted[0].email)) {
+        // Exactly 1 MOE student account found on Chrome: select it
+        setDetectedStudent(sorted[0]);
         setIsChoosingAccount(false);
-      } else if (enriched.length >= 2) {
-        // Multiple student accounts on this Chrome profile: show selection buttons!
+      } else if (sorted.length >= 1) {
+        // Accounts available: let student choose
         setDetectedStudent(null);
         setIsChoosingAccount(true);
       } else {
@@ -462,12 +478,6 @@ export default function StudentView({
       if (res && res.user) {
         const uEmail = (res.user.email || '').toLowerCase().trim();
         const uDisplay = (res.user.displayName || '').trim().toUpperCase();
-
-        if (isTeacherEmail(uEmail)) {
-          alert(`Akaun "${uEmail}" dikesan sebagai akaun GURU (g-). Sila gunakan akaun murid DELIMa (m-) untuk menjawab tugasan murid.`);
-          return;
-        }
-
         // Match against classroom roster
         let matched = classRoster.find(s => s.email && s.email.toLowerCase() === uEmail);
         if (!matched && uDisplay) {
@@ -483,10 +493,11 @@ export default function StudentView({
         };
 
         saveMoeAccount(studentAcc);
-        const updated = getStoredMoeAccounts();
-        setMoeAccounts(updated);
+        const stored = getStoredMoeAccounts();
+        const sorted = sortAccountsWithMoePriority(stored);
+        setMoeAccounts(sorted);
 
-        // Write directly into confirmation screen!
+        // Select account directly
         setDetectedStudent(studentAcc);
         setIsChoosingAccount(false);
         setIsManualInputMode(false);
@@ -679,36 +690,64 @@ export default function StudentView({
                   </span>
                 </div>
 
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {moeAccounts.map((acc, idx) => (
-                    <button
-                      key={acc.email || idx}
-                      type="button"
-                      onClick={() => selectStudentAccount(acc)}
-                      className="w-full text-left p-3.5 bg-white hover:bg-emerald-50/80 border-2 border-slate-200 hover:border-emerald-500 rounded-2xl transition shadow-xs group flex items-center justify-between cursor-pointer active:scale-98"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                          {acc.photoUrl ? (
-                            <img src={acc.photoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
-                          ) : (
-                            acc.fullName.slice(0, 2).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-black text-xs sm:text-sm text-slate-900 group-hover:text-emerald-800 truncate uppercase">
-                            {acc.fullName}
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                  {moeAccounts.map((acc, idx) => {
+                    const isMoe = isMoeAccount(acc.email);
+                    return (
+                      <button
+                        key={acc.email || idx}
+                        type="button"
+                        onClick={() => selectStudentAccount(acc)}
+                        className={`w-full text-left p-3.5 rounded-2xl transition shadow-xs group flex items-center justify-between cursor-pointer active:scale-98 border-2 ${
+                          isMoe 
+                            ? 'bg-emerald-50/90 border-emerald-300 hover:bg-emerald-100/90 hover:border-emerald-500 shadow-emerald-700/5' 
+                            : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs ${
+                            isMoe ? 'bg-gradient-to-tr from-emerald-600 to-teal-700' : 'bg-gradient-to-tr from-slate-500 to-slate-700'
+                          }`}>
+                            {acc.photoUrl ? (
+                              <img src={acc.photoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+                            ) : (
+                              acc.fullName.slice(0, 2).toUpperCase()
+                            )}
                           </div>
-                          <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
-                            {acc.email}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-black text-xs sm:text-sm truncate uppercase ${
+                                isMoe ? 'text-emerald-950 group-hover:text-emerald-900' : 'text-slate-900 group-hover:text-slate-800'
+                              }`}>
+                                {acc.fullName}
+                              </span>
+                              {isMoe ? (
+                                <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-2xs tracking-wider flex items-center gap-1">
+                                  <span>⭐</span> Rekomendasi MOE
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                                  Akaun Google Lain
+                                </span>
+                              )}
+                            </div>
+                            <div className={`text-[11px] font-mono truncate mt-0.5 ${
+                              isMoe ? 'text-emerald-700 font-semibold' : 'text-slate-500'
+                            }`}>
+                              {acc.email}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200 shrink-0 ml-2 group-hover:bg-emerald-600 group-hover:text-white transition">
-                        Pilih ➔
-                      </span>
-                    </button>
-                  ))}
+                        <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 ml-2 transition ${
+                          isMoe 
+                            ? 'bg-emerald-600 text-white border-emerald-600 group-hover:bg-emerald-700 shadow-xs' 
+                            : 'bg-slate-100 text-slate-700 border-slate-200 group-hover:bg-slate-200'
+                        }`}>
+                          Pilih ➔
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <button

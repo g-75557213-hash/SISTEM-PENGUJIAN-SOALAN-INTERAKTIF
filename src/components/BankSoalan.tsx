@@ -736,29 +736,29 @@ export default function BankSoalan({
                       key={group.babTitle} 
                       className="bg-white/95 border-2 border-slate-200 rounded-3xl p-5 sm:p-6 shadow-xs hover:border-slate-300 transition-all space-y-4"
                     >
-                      {/* BAB AREA HEADER */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+                      {/* BAB AREA HEADER WITH SOFT PURPLE GRADIENT */}
+                      <div className="bg-gradient-to-r from-purple-100/90 via-fuchsia-50/70 to-purple-50/90 border border-purple-200/80 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-700 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0 border border-white/50">
                             {group.babNumber < 9000 ? `B${group.babNumber}` : '📖'}
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200/70 tracking-wider">
+                              <span className="text-[11px] font-black text-purple-800 bg-white/90 px-2.5 py-0.5 rounded-lg border border-purple-200 shadow-2xs tracking-wider">
                                 {group.babNumber < 9000 ? `BAB ${group.babNumber}` : 'TOPIK'}
                               </span>
-                              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                              <h3 className="text-base sm:text-lg font-black text-purple-950 tracking-tight">
                                 {group.babTitle}
                               </h3>
                             </div>
-                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                            <p className="text-[11px] text-purple-700/80 font-medium mt-0.5">
                               Disusun mengikut Standard Pembelajaran (SP) terendah ke tertinggi
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 shadow-2xs">
+                          <span className="text-xs font-black text-purple-900 bg-white/95 px-3 py-1.5 rounded-full border border-purple-200 shadow-2xs">
                             {group.questions.length} Soalan
                           </span>
                         </div>
