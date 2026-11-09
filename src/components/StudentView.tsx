@@ -258,51 +258,13 @@ export default function StudentView({
     const activeEmail = (user?.email || '').toLowerCase().trim();
     const activeIsTeacher = isTeacherEmail(activeEmail);
 
-    if (user && !activeIsTeacher) {
-      // Current active Chrome user is a student: direct to quiz!
-      const matched = sorted.find(a => a.email.toLowerCase() === activeEmail) || {
-        email: activeEmail,
-        fullName: (user.displayName || activeEmail.split('@')[0]).toUpperCase(),
-        userId: user.uid,
-        photoUrl: user.photoURL,
-        isExactRosterMatch: false
-      };
-      setDetectedStudent(matched);
-      setIsChoosingAccount(false);
-      setConfirmedStudent({
-        userId: matched.userId || user.uid,
-        nama: matched.fullName,
-        email: matched.email || activeEmail,
-        matchedClassroomName: matched.fullName,
-        matchedStudentId: matched.userId || user.uid,
-        verificationStatus: 'verified'
-      });
-    } else {
-      // Active user is teacher or not logged in
-      if (sorted.length === 1 && isMoeAccount(sorted[0].email)) {
-        const singleAcc = sorted[0];
-        setDetectedStudent(singleAcc);
-        setIsChoosingAccount(false);
-        setConfirmedStudent({
-          userId: singleAcc.userId || '',
-          nama: singleAcc.fullName,
-          email: singleAcc.email || '',
-          matchedClassroomName: singleAcc.fullName,
-          matchedStudentId: singleAcc.userId || '',
-          verificationStatus: 'verified'
-        });
-      } else if (sorted.length >= 1) {
-        setDetectedStudent(null);
-        setIsChoosingAccount(true);
-      } else {
-        setDetectedStudent(null);
-        setIsChoosingAccount(false);
-        // Auto trigger detection if empty
-        if (!autoDetectAttemptedRef.current) {
-          autoDetectAttemptedRef.current = true;
-          handleSignIn();
-        }
-      }
+    // Keep detectedStudent null initially so student can select from list
+    setDetectedStudent(null);
+    setIsChoosingAccount(true);
+
+    if (sorted.length === 0 && !user && !autoDetectAttemptedRef.current) {
+      autoDetectAttemptedRef.current = true;
+      handleSignIn();
     }
   }, [user, classRoster, isGCMode]);
 
@@ -538,18 +500,10 @@ export default function StudentView({
         const sorted = sortAccountsWithMoePriority(stored);
         setMoeAccounts(sorted);
 
-        // Select account directly and launch interactive quiz
+        // Select account to trigger confirmation card step
         setDetectedStudent(studentAcc);
         setIsChoosingAccount(false);
         setIsManualInputMode(false);
-        setConfirmedStudent({
-          userId: studentAcc.userId || res.user.uid,
-          nama: studentAcc.fullName,
-          email: studentAcc.email || uEmail,
-          matchedClassroomName: studentAcc.fullName,
-          matchedStudentId: studentAcc.userId || res.user.uid,
-          verificationStatus: 'verified'
-        });
       }
     } catch (err: any) {
       console.error(err);
@@ -565,14 +519,6 @@ export default function StudentView({
     setDetectedStudent(account);
     setIsChoosingAccount(false);
     setIsManualInputMode(false);
-    setConfirmedStudent({
-      userId: account.userId || '',
-      nama: account.fullName,
-      email: account.email || '',
-      matchedClassroomName: account.fullName,
-      matchedStudentId: account.userId || '',
-      verificationStatus: 'verified'
-    });
   };
 
   // Google Classroom: Student clicks "Pasti" (Identity confirmed)
@@ -684,6 +630,91 @@ export default function StudentView({
   if (isGCMode) {
     // 1A. Step 1: Identification & Confirmation Card
     if (!confirmedStudent) {
+      if (detectedStudent) {
+        const isMoe = isMoeAccount(detectedStudent.email);
+        return (
+          <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50/50 to-indigo-100/50 p-4">
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in-95 duration-200 text-center">
+              {/* Header Avatar / Icon */}
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md ${
+                isMoe ? 'bg-gradient-to-tr from-emerald-600 to-teal-700 text-white' : 'bg-gradient-to-tr from-blue-600 to-indigo-700 text-white'
+              }`}>
+                {detectedStudent.photoUrl ? (
+                  <img src={detectedStudent.photoUrl} alt="" className="w-full h-full rounded-2xl object-cover" />
+                ) : (
+                  <span className="text-2xl font-black">{detectedStudent.fullName.slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black mb-3 border shadow-2xs">
+                {isMoe ? (
+                  <span className="bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1">
+                    ⭐ Akaun DELIMa MOE Dikesan
+                  </span>
+                ) : (
+                  <span className="bg-slate-100 text-slate-700 border-slate-200 flex items-center gap-1">
+                    👤 Akaun Google Dikesan
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-xl sm:text-2xl font-black text-slate-800 mb-1">
+                Pengesahan Identiti Murid
+              </h2>
+              <p className="text-xs text-slate-500 mb-5 leading-relaxed font-medium">
+                Sahkan akaun anda sebelum memulakan tugasan:
+              </p>
+
+              {/* Account Details Box */}
+              <div className={`p-4 rounded-2xl border-2 mb-6 text-left ${
+                isMoe ? 'bg-emerald-50/90 border-emerald-300' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  NAMA MURID:
+                </div>
+                <div className={`text-base font-black uppercase truncate ${
+                  isMoe ? 'text-emerald-950' : 'text-slate-900'
+                }`}>
+                  {detectedStudent.fullName}
+                </div>
+                {detectedStudent.email && (
+                  <div className={`text-xs font-mono truncate mt-1 ${
+                    isMoe ? 'text-emerald-700 font-semibold' : 'text-slate-600'
+                  }`}>
+                    {detectedStudent.email}
+                  </div>
+                )}
+                {courseName && (
+                  <div className="mt-2 pt-2 border-t border-slate-200/70 text-[11px] font-bold text-blue-700">
+                    Kelas: {courseName}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleConfirmDetectedStudent}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 px-4 rounded-2xl transition shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <span>Ya, Saya Murid Ini & Mula Menjawab</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetectedStudent(null)}
+                  className="w-full bg-white hover:bg-slate-100 text-slate-700 font-bold py-2.5 px-4 rounded-2xl border-2 border-slate-300 transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>← Bukan Saya / Pilih Akaun Lain</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen w-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50/50 to-indigo-100/50 p-4">
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-xl max-w-md w-full border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
