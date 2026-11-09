@@ -261,11 +261,6 @@ export default function StudentView({
     // Keep detectedStudent null initially so student can select from list
     setDetectedStudent(null);
     setIsChoosingAccount(true);
-
-    if (sorted.length === 0 && !user && !autoDetectAttemptedRef.current) {
-      autoDetectAttemptedRef.current = true;
-      handleSignIn();
-    }
   }, [user, classRoster, isGCMode]);
 
   // Compute fuzzy matches whenever manual input name changes
@@ -768,17 +763,17 @@ export default function StudentView({
 
             {/* A. GOOGLE ACCOUNTS DETECTED IN CHROME */}
             {moeAccounts.length > 0 ? (
-              <div className="space-y-2.5 mb-4">
+              <div className="space-y-2 mb-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>👤</span> Pilih Akaun Google Dikesan ({moeAccounts.length}):
+                  <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1">
+                    <span>👤</span> Pilih Akaun Google Murid ({moeAccounts.length}):
                   </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
                     Sedia Dipilih
                   </span>
                 </div>
 
-                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                   {moeAccounts.map((acc, idx) => {
                     const isMoe = isMoeAccount(acc.email);
                     return (
@@ -786,49 +781,47 @@ export default function StudentView({
                         key={acc.email || idx}
                         type="button"
                         onClick={() => selectStudentAccount(acc)}
-                        className={`w-full text-left p-3.5 rounded-2xl transition shadow-xs group flex items-center justify-between cursor-pointer active:scale-98 border-2 ${
+                        className={`w-full text-left p-2 sm:p-2.5 rounded-xl transition shadow-2xs group flex items-center justify-between cursor-pointer active:scale-98 border ${
                           isMoe 
-                            ? 'bg-emerald-50/90 border-emerald-300 hover:bg-emerald-100/90 hover:border-emerald-500 shadow-emerald-700/5' 
+                            ? 'bg-emerald-50/90 border-emerald-300 hover:bg-emerald-100/90 hover:border-emerald-400' 
                             : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-10 h-10 rounded-xl text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs ${
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg text-white font-black text-[11px] flex items-center justify-center shrink-0 shadow-2xs ${
                             isMoe ? 'bg-gradient-to-tr from-emerald-600 to-teal-700' : 'bg-gradient-to-tr from-slate-500 to-slate-700'
                           }`}>
                             {acc.photoUrl ? (
-                              <img src={acc.photoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+                              <img src={acc.photoUrl} alt="" className="w-full h-full rounded-lg object-cover" />
                             ) : (
                               acc.fullName.slice(0, 2).toUpperCase()
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-black text-xs sm:text-sm truncate uppercase ${
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`font-black text-xs truncate uppercase ${
                                 isMoe ? 'text-emerald-950 group-hover:text-emerald-900' : 'text-slate-900 group-hover:text-slate-800'
                               }`}>
                                 {acc.fullName}
                               </span>
-                              {isMoe ? (
-                                <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-2xs tracking-wider flex items-center gap-1">
-                                  <span>⭐</span> Rekomendasi MOE
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
-                                  Akaun Google Lain
+                              {isMoe && (
+                                <span className="text-[9px] font-black bg-emerald-600 text-white px-1.5 py-0.2 rounded-full tracking-wider flex items-center gap-0.5">
+                                  <span>⭐</span> MOE
                                 </span>
                               )}
                             </div>
-                            <div className={`text-[11px] font-mono truncate mt-0.5 ${
-                              isMoe ? 'text-emerald-700 font-semibold' : 'text-slate-500'
-                            }`}>
-                              {acc.email}
-                            </div>
+                            {acc.email && (
+                              <div className={`text-[10px] font-mono truncate ${
+                                isMoe ? 'text-emerald-700 font-semibold' : 'text-slate-500'
+                              }`}>
+                                {acc.email}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 ml-2 transition ${
+                        <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border shrink-0 ml-1.5 transition ${
                           isMoe 
-                            ? 'bg-emerald-600 text-white border-emerald-600 group-hover:bg-emerald-700 shadow-xs' 
+                            ? 'bg-emerald-600 text-white border-emerald-600 group-hover:bg-emerald-700' 
                             : 'bg-slate-100 text-slate-700 border-slate-200 group-hover:bg-slate-200'
                         }`}>
                           Pilih ➔
@@ -837,25 +830,12 @@ export default function StudentView({
                     );
                   })}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleSignIn}
-                  disabled={isDetectingAccount}
-                  className="w-full py-2 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/60 hover:bg-blue-100/60 rounded-xl border border-blue-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="w-3.5 h-3.5" />
-                  <span>{isDetectingAccount ? "Menyemak Akaun..." : "+ Kesan / Log Masuk Akaun Google Lain"}</span>
-                </button>
               </div>
             ) : (
-              <div className="mb-4 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-center flex flex-col items-center justify-center gap-2 shadow-2xs">
-                <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="mb-3 p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 shadow-2xs">
+                <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-xs text-emerald-950 font-extrabold">
                   Sedang Mengesan Akaun Google Chrome...
-                </p>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  Sistem mengesan akaun murid secara automatik tanpa perlu menekan butang.
                 </p>
               </div>
             )}
@@ -941,6 +921,34 @@ export default function StudentView({
         window.COURSE_WORK_ID = "${(currentCourseWorkId || '').replace(/"/g, '\\"')}";
         window.IS_UMUM = false;
         window.VERIFICATION_STATUS = "${confirmedStudent.verificationStatus}";
+
+        // Ping server immediately: Status Sedang Menjawab
+        (function() {
+          try {
+            fetch('/api/submit-score', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                qid: "${qid}",
+                kod: "${currentKod || ''}",
+                kelas: "${(courseName || currentKelasParam || '').replace(/"/g, '\\"')}",
+                courseId: "${(currentCourseId || '').replace(/"/g, '\\"')}",
+                courseWorkId: "${(currentCourseWorkId || '').replace(/"/g, '\\"')}",
+                nama: "${activeStudentName.replace(/"/g, '\\"')}",
+                rawTypedName: "${(confirmedStudent.rawTypedName || activeStudentName).replace(/"/g, '\\"')}",
+                matchedClassroomName: "${(confirmedStudent.matchedClassroomName || activeStudentName).replace(/"/g, '\\"')}",
+                matchedStudentId: "${confirmedStudent.matchedStudentId || ''}",
+                email: "${activeStudentEmail.replace(/"/g, '\\"')}",
+                markah: null,
+                status: 'Sedang Menjawab',
+                verificationStatus: "${confirmedStudent.verificationStatus}",
+                possibleMatches: ${JSON.stringify(confirmedStudent.possibleMatches || [])},
+                mod: 'gc',
+                spreadsheetId: "${spreadsheetId || ''}"
+              })
+            }).catch(function(err){});
+          } catch(e) {}
+        })();
 
         window.hantarMarkahKeSistem = function(markah, status) {
           try {
@@ -1131,6 +1139,26 @@ export default function StudentView({
       window.USER_KELAS = "${publicKelas.replace(/"/g, '\\"')}";
       window.TUGASAN_KOD = "${(currentKod || '').replace(/"/g, '\\"')}";
       window.IS_UMUM = true;
+
+      // Ping server immediately: Status Sedang Menjawab
+      (function() {
+        try {
+          fetch('/api/submit-score', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              qid: "${qid}",
+              kod: "${currentKod || ''}",
+              kelas: "${publicKelas.replace(/"/g, '\\"')}",
+              nama: "${publicNama.replace(/"/g, '\\"')}",
+              markah: null,
+              status: 'Sedang Menjawab',
+              isUmum: true,
+              spreadsheetId: "${spreadsheetId || ''}"
+            })
+          }).catch(function(err){});
+        } catch(e) {}
+      })();
 
       function hapusPopupLogin() {
         try {

@@ -287,7 +287,7 @@ export default function App() {
     const videoPrompt = videoUrl ? `\n\nSILA MASUKKAN VIDEO INI SEBAGAI RUJUKAN DI DALAM APLIKASI (Contohnya di bahagian tepi atau atas aplikasi):\n<video src="${videoUrl}" controls width="100%"></video>\nPastikan video ini berfungsi.\n` : '';
     const extVideoPrompt = questionVideoLink.trim() ? `\n\nSILA GUNAKAN PAUTAN VIDEO INI [${questionVideoLink}] SEBAGAI RUJUKAN ATAU PENGENALAN DI DALAM APLIKASI. Anda boleh memaparkannya menggunakan iframe atau menggunakannya sebagai konteks untuk soalan.\n` : '';
     const parsedNumQuestions = typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5);
-    const nyawa = Math.max(1, Math.ceil(parsedNumQuestions / 2));
+    const nyawa = Math.max(1, Math.round(parsedNumQuestions / 3));
 
     const prompt = `Bertindak sebagai Pakar Pembangun Web Interaktif Pendidikan (Gamified Learning). Tugas anda adalah membina aplikasi kuiz/soalan interaktif berasaskan web (single-file HTML) menggunakan HTML, Tailwind CSS, dan JavaScript yang SANGAT MENARIK, ESTETIK, DAN FUNGSIONAL.
 
@@ -304,7 +304,7 @@ KRITERIA WAJIB:
 - **Tema Beridentiti:** Setiap set soalan mempunyai reka bentuk visual (tema warna, susun atur) yang unik mengikut topik (cth: Fizik - Kosmik, Matematik - Retro).
 - **Audio (Web Audio API):** WAJIB guna Web Audio API untuk mensintesis muzik latar (synthesia) yang sedap didengar, menenangkan (lo-fi/ambient/pad) secara berulang (loop) dengan kelantangan perlahan. JANGAN guna link audio/mp3 luar! Hasilkan kord/melodi sintesis yang merdu menggunakan gabungan oscillator (sine/triangle). Sertakan juga bunyi Sfx untuk jawapan betul/salah. Sediakan butang Mute/Unmute.
 - **Animasi Penuh:** Wajib ada animasi masuk/keluar yang menyeluruh bagi setiap elemen UI, menggunakan CSS animasi keyframes atau RequestAnimationFrame.
-- **Nyawa:** Memandangkan ada ${parsedNumQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️. Jika salah, tolak 1 nyawa.
+- **Nyawa:** Memandangkan ada ${parsedNumQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️ (Secara nisbah 3 soalan = 1 nyawa, contohnya 15 soalan = 5 nyawa). Jika jawapan salah, tolak 1 nyawa.
 - **Bilangan Soalan:** Cipta TEPAT ${parsedNumQuestions} soalan berperingkat.
 - **Dwibahasa:** Arahan paparan dalam Bahasa Melayu (tebal) dan terjemahan Bahasa Inggeris (condong).
 
@@ -2010,7 +2010,7 @@ function syncClassroom() {
                   <div className="text-xs text-slate-600 font-medium">
                     <span className="font-bold text-slate-800">soalan</span> &bull; Pelajar akan diperuntukkan{' '}
                     <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                      ❤️ {Math.max(1, Math.ceil((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 2))} Nyawa
+                      ❤️ {Math.max(1, Math.round((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 3))} Nyawa
                     </span>
                   </div>
                 </div>

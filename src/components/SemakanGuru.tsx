@@ -500,6 +500,54 @@ export default function SemakanGuru({
     }
   }, [activeSemakanTab, user]);
 
+  // Real-Time Live Auto-Sync Polling Effect (3 seconds)
+  useEffect(() => {
+    const fetchLiveUpdates = async () => {
+      try {
+        if (activeSemakanTab === 'umum') {
+          const res = await fetch('/api/tugasan-umum-submissions');
+          if (res.ok) {
+            const liveSubs = await res.json();
+            if (Array.isArray(liveSubs)) {
+              setTugasanUmumSubs(liveSubs);
+            }
+          }
+        } else if (selectedClass) {
+          const res = await fetch(`/api/submissions?courseId=${encodeURIComponent(selectedClass)}`);
+          if (res.ok) {
+            const liveSubs = await res.json();
+            if (Array.isArray(liveSubs) && liveSubs.length > 0) {
+              setOurSubmissions(prev => {
+                const map = new Map<string, any>();
+                prev.forEach(item => {
+                  const key = (item.email || item.nama || item.matchedStudentId || '').toLowerCase().trim();
+                  if (key) map.set(key, item);
+                });
+                liveSubs.forEach(item => {
+                  const key = (item.email || item.nama || item.matchedStudentId || '').toLowerCase().trim();
+                  if (key) {
+                    map.set(key, {
+                      ...map.get(key),
+                      ...item,
+                      markah: item.markah !== null && item.markah !== undefined ? item.markah : map.get(key)?.markah,
+                      status: item.status || map.get(key)?.status
+                    });
+                  }
+                });
+                return Array.from(map.values());
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // live sync background notice
+      }
+    };
+
+    const timer = setInterval(fetchLiveUpdates, 3000);
+    return () => clearInterval(timer);
+  }, [activeSemakanTab, selectedClass]);
+
   const uniqueUmumClasses = useMemo(() => {
     const set = new Set<string>();
     tugasanUmumList.forEach(t => { if (t.kelas) set.add(t.kelas); });
@@ -1653,9 +1701,37 @@ export default function SemakanGuru({
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                              <Check className="w-3 h-3" /> Selesai
-                            </span>
+                            {(() => {
+                              const sStatus = (sub.status || '').toLowerCase();
+                              const isSedang = sStatus.includes('sedang');
+                              const isSelesai = sStatus.includes('selesai') || sStatus.includes('telah') || sub.markah !== null;
+                              
+                              if (isSedang) {
+                                return (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-900 border border-blue-300 shadow-2xs">
+                                    <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                                    </span>
+                                    Sedang Menjawab
+                                  </span>
+                                );
+                              } else if (isSelesai) {
+                                return (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-emerald-600"></span>
+                                    Selesai Menjawab
+                                  </span>
+                                );
+                              } else {
+                                return (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                    <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-amber-500"></span>
+                                    Belum Menjawab
+                                  </span>
+                                );
+                              }
+                            })()}
                           </td>
                           <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[11px]">
                             {sub.updatedAt || '-'}
@@ -2226,25 +2302,21 @@ export default function SemakanGuru({
                               else if (normalizedStatus === 'sedang menjawab') displayState = 'ACTIVE';
                             }
                             
-                            const getStatusColor = (state) => {
+                             const getStatusColor = (state: string) => {
                               switch (state) {
-                                case 'TURNED_IN': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                                case 'RETURNED': return 'bg-blue-100 text-blue-800 border-blue-200';
-                                case 'ACTIVE': return 'bg-purple-100 text-purple-800 border-purple-200';
-                                case 'NEW':
-                                case 'CREATED': return 'bg-amber-100 text-amber-800 border-amber-200';
-                                default: return 'bg-slate-100 text-slate-800 border-slate-200';
+                                case 'TURNED_IN': 
+                                case 'RETURNED': return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold';
+                                case 'ACTIVE': return 'bg-blue-100 text-blue-900 border-blue-300 font-extrabold shadow-2xs';
+                                default: return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
                               }
                             };
                           
-                            const getStatusText = (state) => {
+                            const getStatusText = (state: string) => {
                               switch (state) {
                                 case 'TURNED_IN': return 'Selesai Menjawab';
-                                case 'RETURNED': return 'Telah Disemak';
+                                case 'RETURNED': return 'Disemak';
                                 case 'ACTIVE': return 'Sedang Menjawab';
-                                case 'NEW':
-                                case 'CREATED': return 'Belum Mula';
-                                default: return state;
+                                default: return 'Belum Menjawab';
                               }
                             };
 
@@ -2261,8 +2333,17 @@ export default function SemakanGuru({
                                 <div className="flex-1 min-w-0 pr-2">
                                   <div className="font-semibold text-sm text-slate-800 truncate">{name}</div>
                                   <div className="text-[11px] text-slate-400 font-mono truncate">{email}</div>
-                                  <div className={`mt-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(displayState)}`}>
-                                    <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current"></span>
+                                  <div className={`mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] border ${getStatusColor(displayState)}`}>
+                                    {displayState === 'ACTIVE' ? (
+                                      <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                                      </span>
+                                    ) : (displayState === 'TURNED_IN' || displayState === 'RETURNED') ? (
+                                      <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-emerald-600"></span>
+                                    ) : (
+                                      <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-amber-500"></span>
+                                    )}
                                     {getStatusText(displayState)}
                                   </div>
                                 </div>
@@ -2388,17 +2469,19 @@ export default function SemakanGuru({
                               let displayState = 'TURNED_IN';
                               if (statusStr.includes('sedang')) displayState = 'ACTIVE';
 
-                              const getStatusColor = (state) => {
+                              const getStatusColor = (state: string) => {
                                 switch (state) {
-                                  case 'ACTIVE': return 'bg-purple-100 text-purple-800 border-purple-200';
-                                  default: return 'bg-amber-100 text-amber-800 border-amber-200';
+                                  case 'ACTIVE': return 'bg-blue-100 text-blue-900 border-blue-300 font-extrabold shadow-2xs';
+                                  case 'TURNED_IN': return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold';
+                                  default: return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
                                 }
                               };
                               
-                              const getStatusText = (state) => {
+                              const getStatusText = (state: string) => {
                                 switch (state) {
                                   case 'ACTIVE': return 'Sedang Menjawab';
-                                  default: return 'Selesai Menjawab';
+                                  case 'TURNED_IN': return 'Selesai Menjawab';
+                                  default: return 'Belum Menjawab';
                                 }
                               };
 
@@ -2421,8 +2504,17 @@ export default function SemakanGuru({
                                       <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Luar Kelas</span>
                                     </div>
                                     <div className="text-[11px] text-slate-400 font-mono truncate">{email}</div>
-                                    <div className={`mt-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(displayState)}`}>
-                                      <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-current"></span>
+                                    <div className={`mt-1.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] border ${getStatusColor(displayState)}`}>
+                                      {displayState === 'ACTIVE' ? (
+                                        <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                                        </span>
+                                      ) : displayState === 'TURNED_IN' ? (
+                                        <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-emerald-600"></span>
+                                      ) : (
+                                        <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-amber-500"></span>
+                                      )}
                                       {getStatusText(displayState)}
                                     </div>
                                   </div>
