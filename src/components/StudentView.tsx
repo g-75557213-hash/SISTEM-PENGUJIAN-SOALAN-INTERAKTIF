@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { googleSignIn, initAuth, logout, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { LogOut, UserCheck, CheckCircle2, Edit3, ArrowRight, ShieldCheck, AlertCircle, School, Hash, RefreshCw, KeyRound, Sparkles } from 'lucide-react';
+import { LogOut, UserCheck, CheckCircle2, Edit3, ArrowRight, ShieldCheck, AlertCircle, School, Hash, RefreshCw, KeyRound, Sparkles, Users } from 'lucide-react';
 
 interface StudentViewProps {
   qid: string;
@@ -59,6 +59,45 @@ export default function StudentView({
     photoUrl?: string;
     isExactRosterMatch?: boolean;
   } | null>(null);
+
+  interface MoeAccount {
+    email: string;
+    fullName: string;
+    userId?: string;
+    photoUrl?: string;
+    isExactRosterMatch?: boolean;
+  }
+
+  const [moeAccounts, setMoeAccounts] = useState<MoeAccount[]>([]);
+  const [isChoosingAccount, setIsChoosingAccount] = useState<boolean>(false);
+  const [isDetectingAccount, setIsDetectingAccount] = useState<boolean>(false);
+
+  const isTeacherEmail = (email: string) => {
+    const e = (email || '').toLowerCase().trim();
+    return e.startsWith('g-') || e.includes('guru');
+  };
+
+  const getStoredMoeAccounts = (): MoeAccount[] => {
+    try {
+      const raw = localStorage.getItem('known_moe_student_accounts');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  const saveMoeAccount = (account: MoeAccount) => {
+    try {
+      const current = getStoredMoeAccounts();
+      const cleanEmail = (account.email || '').toLowerCase().trim();
+      if (!cleanEmail) return;
+      const filtered = current.filter(a => (a.email || '').toLowerCase().trim() !== cleanEmail);
+      const updated = [account, ...filtered].slice(0, 8);
+      localStorage.setItem('known_moe_student_accounts', JSON.stringify(updated));
+    } catch (e) {}
+  };
 
   const [confirmedStudent, setConfirmedStudent] = useState<{
     userId?: string;
@@ -133,39 +172,80 @@ export default function StudentView({
   useEffect(() => {
     if (!isGCMode) return;
 
+    let stored = getStoredMoeAccounts();
+
+    // If active user is signed in
     if (user) {
       const userEmail = (user.email || '').toLowerCase().trim();
       const userDisplay = (user.displayName || '').trim().toUpperCase();
+      const isTeacher = isTeacherEmail(userEmail);
 
-      // 1. Try to match by email in classroom roster
-      let matched = classRoster.find(s => s.email && s.email.toLowerCase() === userEmail);
+      // Only save if it is an actual student account (not a teacher)
+      if (!isTeacher && userEmail) {
+        let matched = classRoster.find(s => s.email && s.email.toLowerCase() === userEmail);
+        if (!matched && userDisplay) {
+          matched = classRoster.find(s => normalize(s.fullName) === normalize(userDisplay));
+        }
 
-      // 2. Try to match by full name in classroom roster
-      if (!matched && userDisplay) {
-        const cleanUserDisplay = normalize(userDisplay);
-        matched = classRoster.find(s => normalize(s.fullName) === cleanUserDisplay);
-      }
-
-      if (matched) {
-        setDetectedStudent({
-          userId: matched.userId,
-          fullName: matched.fullName,
-          email: matched.email || userEmail,
-          photoUrl: user.photoURL || matched.photoUrl,
-          isExactRosterMatch: true
-        });
-      } else {
-        // Active Google account detected, but not yet verified against this specific class roster
-        setDetectedStudent({
-          userId: user.uid,
-          fullName: userDisplay || userEmail.split('@')[0].toUpperCase(),
+        const studentAcc: MoeAccount = {
           email: userEmail,
-          photoUrl: user.photoURL,
-          isExactRosterMatch: false
-        });
+          fullName: matched ? matched.fullName : (userDisplay || userEmail.split('@')[0].toUpperCase()),
+          userId: matched ? matched.userId : user.uid,
+          photoUrl: user.photoURL || matched?.photoUrl,
+          isExactRosterMatch: !!matched
+        };
+
+        saveMoeAccount(studentAcc);
+        stored = getStoredMoeAccounts();
       }
+    }
+
+    // Enrich stored accounts with classRoster details
+    const enriched = stored.map(acc => {
+      const rMatch = classRoster.find(s => s.email && s.email.toLowerCase() === acc.email.toLowerCase()) ||
+                     classRoster.find(s => normalize(s.fullName) === normalize(acc.fullName));
+      if (rMatch) {
+        return {
+          ...acc,
+          fullName: rMatch.fullName,
+          userId: rMatch.userId,
+          photoUrl: acc.photoUrl || rMatch.photoUrl,
+          isExactRosterMatch: true
+        };
+      }
+      return acc;
+    });
+
+    setMoeAccounts(enriched);
+
+    const activeEmail = (user?.email || '').toLowerCase().trim();
+    const activeIsTeacher = isTeacherEmail(activeEmail);
+
+    if (user && !activeIsTeacher) {
+      // Current active Chrome user is a student: write their name directly!
+      const matched = enriched.find(a => a.email.toLowerCase() === activeEmail) || {
+        email: activeEmail,
+        fullName: (user.displayName || activeEmail.split('@')[0]).toUpperCase(),
+        userId: user.uid,
+        photoUrl: user.photoURL,
+        isExactRosterMatch: false
+      };
+      setDetectedStudent(matched);
+      setIsChoosingAccount(false);
     } else {
-      setDetectedStudent(null);
+      // Active user is teacher or not logged in
+      if (enriched.length === 1) {
+        // Exactly 1 student MOE account found on Chrome: write it directly for confirmation!
+        setDetectedStudent(enriched[0]);
+        setIsChoosingAccount(false);
+      } else if (enriched.length >= 2) {
+        // Multiple student accounts on this Chrome profile: show selection buttons!
+        setDetectedStudent(null);
+        setIsChoosingAccount(true);
+      } else {
+        setDetectedStudent(null);
+        setIsChoosingAccount(false);
+      }
     }
   }, [user, classRoster, isGCMode]);
 
@@ -207,7 +287,8 @@ export default function StudentView({
   // Load saved identity from localStorage for Tugasan Umum
   useEffect(() => {
     if (!isGCMode) {
-      if (user && user.displayName) {
+      const isTeacher = isTeacherEmail(user?.email || '');
+      if (user && user.displayName && !isTeacher) {
         setPublicNama(user.displayName.toUpperCase());
       } else {
         const savedNama = localStorage.getItem(`umum_student_nama`);
@@ -376,11 +457,54 @@ export default function StudentView({
 
   const handleSignIn = async () => {
     try {
-      await googleSignIn();
-    } catch (err) {
+      setIsDetectingAccount(true);
+      const res = await googleSignIn();
+      if (res && res.user) {
+        const uEmail = (res.user.email || '').toLowerCase().trim();
+        const uDisplay = (res.user.displayName || '').trim().toUpperCase();
+
+        if (isTeacherEmail(uEmail)) {
+          alert(`Akaun "${uEmail}" dikesan sebagai akaun GURU (g-). Sila gunakan akaun murid DELIMa (m-) untuk menjawab tugasan murid.`);
+          return;
+        }
+
+        // Match against classroom roster
+        let matched = classRoster.find(s => s.email && s.email.toLowerCase() === uEmail);
+        if (!matched && uDisplay) {
+          matched = classRoster.find(s => normalize(s.fullName) === normalize(uDisplay));
+        }
+
+        const studentAcc: MoeAccount = {
+          email: uEmail,
+          fullName: matched ? matched.fullName : (uDisplay || uEmail.split('@')[0].toUpperCase()),
+          userId: matched ? matched.userId : res.user.uid,
+          photoUrl: res.user.photoURL || matched?.photoUrl,
+          isExactRosterMatch: !!matched
+        };
+
+        saveMoeAccount(studentAcc);
+        const updated = getStoredMoeAccounts();
+        setMoeAccounts(updated);
+
+        // Write directly into confirmation screen!
+        setDetectedStudent(studentAcc);
+        setIsChoosingAccount(false);
+        setIsManualInputMode(false);
+      }
+    } catch (err: any) {
       console.error(err);
-      alert("Gagal log masuk akaun Google.");
+      if (!err?.message?.includes('popup-closed-by-user') && !err?.message?.includes('cancelled')) {
+        alert("Gagal mengesan akaun Google. Anda juga boleh menaip nama secara manual.");
+      }
+    } finally {
+      setIsDetectingAccount(false);
     }
+  };
+
+  const selectStudentAccount = (account: MoeAccount) => {
+    setDetectedStudent(account);
+    setIsChoosingAccount(false);
+    setIsManualInputMode(false);
   };
 
   // Google Classroom: Student clicks "Pasti" (Identity confirmed)
@@ -398,12 +522,37 @@ export default function StudentView({
   };
 
   // Google Classroom: Student submits manual name input (short name / full name)
-  const handleConfirmManualName = (e: React.FormEvent) => {
+  const handleConfirmManualName = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = manualInputName.trim().toUpperCase();
     if (!cleanName) {
       alert("Sila masukkan nama anda.");
       return;
+    }
+
+    // Check if this short name is already a registered alias for this class
+    try {
+      const cid = currentCourseId || '';
+      const aliasRes = await fetch(`/api/check-alias?courseId=${encodeURIComponent(cid)}&name=${encodeURIComponent(cleanName)}`);
+      if (aliasRes.ok) {
+        const aliasData = await aliasRes.json();
+        if (aliasData.found && aliasData.alias) {
+          const al = aliasData.alias;
+          setConfirmedStudent({
+            userId: al.userId,
+            nama: al.fullName,
+            rawTypedName: cleanName,
+            matchedClassroomName: al.fullName,
+            matchedStudentId: al.userId,
+            email: al.email || user?.email || '',
+            verificationStatus: 'verified',
+            possibleMatches: []
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Notice checking alias in StudentView:", e);
     }
 
     // Best fuzzy match in roster
@@ -550,12 +699,79 @@ export default function StudentView({
                   </button>
                 </div>
               </form>
-            ) : detectedStudent ? (
-              // 1B. Full Profile Confirmation Card: "Adakah ini nama anda?"
+            ) : isChoosingAccount && moeAccounts.length >= 2 ? (
+              // 1B. Multiple MOE Student Accounts on this Chrome Profile -> Choice Buttons!
               <div className="space-y-4">
-                {/* Full Profile Card */}
+                <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl text-center">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-2 text-base font-bold shadow-xs">
+                    👥
+                  </div>
+                  <h3 className="font-black text-sm text-slate-800">
+                    Pilihan Akaun Murid DELIMa
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                    Dikesan {moeAccounts.length} akaun murid pada Chrome ini. Sila klik nama murid yang sedang menjawab:
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {moeAccounts.map((acc, idx) => (
+                    <button
+                      key={acc.email || idx}
+                      type="button"
+                      onClick={() => selectStudentAccount(acc)}
+                      className="w-full text-left p-3.5 bg-white hover:bg-emerald-50/80 border-2 border-slate-200 hover:border-emerald-500 rounded-2xl transition shadow-xs group flex items-center justify-between cursor-pointer active:scale-98"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                          {acc.photoUrl ? (
+                            <img src={acc.photoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+                          ) : (
+                            acc.fullName.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-emerald-800 truncate">
+                            {acc.fullName}
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate">
+                            {acc.email}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 ml-2 group-hover:bg-emerald-600 group-hover:text-white transition">
+                        Pilih ➔
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSignIn}
+                    disabled={isDetectingAccount}
+                    className="w-full py-2.5 text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50/70 hover:bg-blue-100/70 rounded-xl border border-blue-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>+ Kesan / Log Masuk Akaun MOE Lain</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualInputName('');
+                      setIsManualInputMode(true);
+                    }}
+                    className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
+                  >
+                    Atau Taip Nama Secara Manual
+                  </button>
+                </div>
+              </div>
+            ) : detectedStudent ? (
+              // 1C. Single Detected MOE Student -> Full Profile Card: "Adakah ini nama anda?"
+              <div className="space-y-4">
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 text-center relative overflow-hidden">
-                  {/* Avatar / Photo */}
                   <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black text-xl flex items-center justify-center shadow-md border-2 border-white">
                     {detectedStudent.photoUrl ? (
                       <img 
@@ -568,12 +784,11 @@ export default function StudentView({
                     )}
                   </div>
 
-                  {/* Detected Official Full Name */}
+                  {/* Directly Written Official Full Name */}
                   <div className="text-base sm:text-lg font-black text-slate-900 leading-snug px-2">
                     {detectedStudent.fullName}
                   </div>
 
-                  {/* Email & Class Details */}
                   <div className="mt-1 text-xs text-slate-500 font-mono">
                     {detectedStudent.email}
                   </div>
@@ -584,7 +799,6 @@ export default function StudentView({
                     </div>
                   )}
 
-                  {/* Question Prompt */}
                   <div className="mt-4 pt-3 border-t border-slate-200/80">
                     <p className="text-sm font-extrabold text-slate-700">
                       Adakah ini nama anda?
@@ -592,9 +806,7 @@ export default function StudentView({
                   </div>
                 </div>
 
-                {/* Two Distinct Action Buttons */}
                 <div className="space-y-2.5 pt-1">
-                  {/* Button 1: PASTI (Primary) */}
                   <button
                     onClick={handleConfirmDetectedStudent}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-600/25 text-base flex items-center justify-center gap-2 cursor-pointer active:scale-98"
@@ -603,7 +815,6 @@ export default function StudentView({
                     <span>Pasti</span>
                   </button>
 
-                  {/* Button 2: TAIP MANUAL (Secondary) */}
                   <button
                     onClick={() => {
                       setManualInputName('');
@@ -616,8 +827,19 @@ export default function StudentView({
                   </button>
                 </div>
 
-                {/* Switch Google Account Helper */}
-                <div className="pt-2 text-center">
+                {/* Account Switch Helpers */}
+                <div className="pt-2 text-center flex flex-col gap-1.5">
+                  {moeAccounts.length > 1 && (
+                    <button
+                      onClick={() => {
+                        setDetectedStudent(null);
+                        setIsChoosingAccount(true);
+                      }}
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 transition"
+                    >
+                      ⇄ Tukar ke akaun murid lain ({moeAccounts.length} akaun)
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       await logout();
@@ -625,22 +847,58 @@ export default function StudentView({
                     }}
                     className="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition underline"
                   >
-                    Bukan anda? Tukar akaun Google Chrome
+                    Bukan anda? Kesan akaun Google Chrome lain
                   </button>
                 </div>
               </div>
             ) : (
-              // 1C. No Google Account detected yet -> Prompt Login or Manual Input
+              // 1D. No Student Account detected yet -> Prompt Login or Manual Input
               <div className="space-y-4 text-center">
+                {user && isTeacherEmail(user.email || '') && (
+                  <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl text-left text-xs text-indigo-950 space-y-2 mb-2">
+                    <div className="flex items-center gap-2 font-black text-indigo-900">
+                      <span className="text-base">👨‍🏫</span> Mod Guru Dikesan
+                    </div>
+                    <p className="text-[11px] text-indigo-800 leading-relaxed">
+                      Anda sedang log masuk akaun guru ({user.email}). Untuk menguji kuiz sebagai murid, anda boleh memilih mana-mana pelajar kelas:
+                    </p>
+                    {classRoster.length > 0 && (
+                      <select
+                        onChange={(e) => {
+                          const s = classRoster.find(st => st.userId === e.target.value);
+                          if (s) {
+                            selectStudentAccount({
+                              userId: s.userId,
+                              fullName: s.fullName,
+                              email: s.email,
+                              photoUrl: s.photoUrl,
+                              isExactRosterMatch: true
+                            });
+                          }
+                        }}
+                        className="w-full text-xs font-bold p-2.5 border-2 border-indigo-300 rounded-xl bg-white text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                      >
+                        <option value="">-- Pilih Murid Kelas Untuk Mod Ujian --</option>
+                        {classRoster.map(s => (
+                          <option key={s.userId} value={s.userId}>
+                            {s.fullName} ({s.email || 'Tiada e-mel'})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
                   <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Sistem sedang menyemak akaun Google Classroom anda di Chrome. Sila pilih kaedah untuk meneruskan:
+                    Sistem bersedia menyemak akaun murid Google Classroom di Chrome anda. Sila pilih kaedah untuk meneruskan:
                   </p>
                 </div>
 
                 <div className="space-y-2.5">
                   <button
                     onClick={handleSignIn}
+                    disabled={isDetectingAccount}
                     className="w-full bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-200 hover:border-slate-300 font-extrabold py-3.5 px-4 rounded-xl transition shadow-xs text-sm flex items-center justify-center gap-2.5 cursor-pointer active:scale-98"
                   >
                     <img 
@@ -648,7 +906,7 @@ export default function StudentView({
                       alt="Google" 
                       className="w-4 h-4" 
                     />
-                    <span>Kesan Akaun Google Chrome</span>
+                    <span>{isDetectingAccount ? "Menyemak Akaun..." : "Kesan Akaun Murid MOE (Chrome)"}</span>
                   </button>
 
                   <button
@@ -817,6 +1075,27 @@ export default function StudentView({
               <span className="font-mono text-xs font-black bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 text-emerald-900 shadow-xs">
                 {currentKod}
               </span>
+            </div>
+          )}
+
+          {moeAccounts.length > 0 && (
+            <div className="mb-3.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl space-y-1.5">
+              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                <span>👤</span> Akaun Murid MOE Dikesan di Chrome:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {moeAccounts.map((acc, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setPublicNama(acc.fullName.toUpperCase())}
+                    className="text-xs font-extrabold bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer flex items-center gap-1 active:scale-95"
+                  >
+                    <span>{acc.fullName}</span>
+                    <span className="text-[10px] text-emerald-600 font-mono">({acc.email})</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

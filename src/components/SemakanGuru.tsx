@@ -94,25 +94,30 @@ export default function SemakanGuru({
       });
 
       if (res.ok) {
+        const newMarkRow = {
+          qid: sub.qid || currentTugasanMatch.qid,
+          status: 'Selesai Menjawab',
+          markah: sub.markah,
+          email: chosenStudent.email,
+          nama: chosenStudent.fullName,
+          kelas: classes.find(c => c.id === selectedClass)?.name || sub.kelas || '',
+          tugasan: assignments.find(a => a.id === selectedAssignment)?.title || '',
+          kodUnik: sub.kod || currentTugasanMatch.kodUnik,
+          matchedStudentId: chosenStudent.userId
+        };
+
+        setOurSubmissions(prev => [newMarkRow, ...prev.filter(r => (r.email || '').toLowerCase() !== (chosenStudent.email || '').toLowerCase())]);
+
         if (token && spreadsheetId) {
           try {
             const { syncSubmissionsToSheets } = await import('../lib/sheets');
-            await syncSubmissionsToSheets(token, [{
-              qid: sub.qid || currentTugasanMatch.qid,
-              status: 'Selesai Menjawab',
-              markah: sub.markah,
-              email: chosenStudent.email,
-              nama: chosenStudent.fullName,
-              kelas: classes.find(c => c.id === selectedClass)?.name || sub.kelas || '',
-              tugasan: assignments.find(a => a.id === selectedAssignment)?.title || '',
-              kodUnik: sub.kod || currentTugasanMatch.kodUnik
-            }], spreadsheetId);
+            await syncSubmissionsToSheets(token, [newMarkRow], spreadsheetId);
           } catch (e) {
             console.warn("Notice saving confirmed student mark to sheets:", e);
           }
         }
 
-        alert(`✓ Berjaya mengesahkan ${sub.rawTypedName || sub.nama} sebagai ${chosenStudent.fullName}! Markah kini sedia untuk disegerakan ke Google Classroom.`);
+        alert(`✓ Berjaya mendaftarkan padanan "${sub.rawTypedName || sub.nama}" sebagai "${chosenStudent.fullName}"!\n\nMarkah (${sub.markah !== undefined && sub.markah !== null ? sub.markah : '-'}%) telah direkodkan. Selepas ini, jika pelajar menjawab kali kedua dengan nama pendek ini, markah akan dikemaskini terus secara automatik tanpa perlu pengesahan lagi.`);
         setActiveResolvingSubmission(null);
         setSelectedCandidateStudent(null);
         await loadPendingVerifications(selectedClass);
@@ -123,7 +128,9 @@ export default function SemakanGuru({
             getMarkahMurid(token, spreadsheetId).catch(() => [])
           ]);
           setSubmissions(updatedSubs);
-          setOurSubmissions(updatedMarks);
+          if (Array.isArray(updatedMarks) && updatedMarks.length > 0) {
+            setOurSubmissions(updatedMarks);
+          }
         }
       } else {
         alert("Gagal mengesahkan murid.");
@@ -946,6 +953,42 @@ export default function SemakanGuru({
       for (const row of allMarks) {
         const rowEmail = (row.email || '').toLowerCase().trim();
         if (rowEmail === studentEmail) {
+          const score = evaluateRow(row);
+          if (score > bestScore && score >= 0) {
+            bestScore = score;
+            bestRow = row;
+          }
+        }
+      }
+
+      if (bestRow) return bestRow;
+    }
+
+    // Try to find rows matching by student ID (from verified Google Classroom submissions)
+    if (student.userId) {
+      let bestRow = null;
+      let bestScore = -1;
+      for (const row of allMarks) {
+        const rowStudentId = row.matchedStudentId || row.userId;
+        if (rowStudentId && rowStudentId === student.userId) {
+          const score = evaluateRow(row);
+          if (score > bestScore && score >= 0) {
+            bestScore = score;
+            bestRow = row;
+          }
+        }
+      }
+      if (bestRow) return bestRow;
+    }
+
+    // Try to find rows matching by 100% exact clean official name
+    if (studentName) {
+      let bestRow = null;
+      let bestScore = -1;
+
+      for (const row of allMarks) {
+        const rowName = (row.nama || row.namaPelajar || '').toLowerCase().trim();
+        if (rowName && matchNames100Percent(studentName, rowName)) {
           const score = evaluateRow(row);
           if (score > bestScore && score >= 0) {
             bestScore = score;
@@ -1813,52 +1856,67 @@ export default function SemakanGuru({
                     </p>
 
                     <div className="space-y-2">
-                      {pendingVerifications.map((item, idx) => (
-                        <div 
-                          key={item.id || idx} 
-                          className="bg-white border border-amber-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-amber-400 transition"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-sm text-slate-800">
-                                {item.rawTypedName || item.nama}
-                              </span>
-                              <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
-                                Markah: {item.markah !== undefined && item.markah !== null ? `${item.markah}%` : '-'}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
-                              <span>Padanan cadangan: <strong className="text-slate-700">{item.matchedClassroomName || 'Tiada'}</strong></span>
-                              {item.possibleMatches?.length > 1 && (
-                                <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                  {item.possibleMatches.length} nama serupa
+                      {pendingVerifications.map((item, idx) => {
+                        const hasMatches = Array.isArray(item.possibleMatches) && item.possibleMatches.length > 0;
+                        const topMatch = hasMatches ? item.possibleMatches[0] : null;
+
+                        return (
+                          <div 
+                            key={item.id || idx} 
+                            className="bg-white border border-amber-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-amber-400 transition"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-sm text-slate-800">
+                                  {item.rawTypedName || item.nama}
                                 </span>
-                              )}
+                                <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                  Markah: {item.markah !== undefined && item.markah !== null ? `${item.markah}%` : '-'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                                {topMatch ? (
+                                  <>
+                                    <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      Cadangan: <strong>{topMatch.fullName}</strong>
+                                    </span>
+                                    {item.possibleMatches.length > 1 && (
+                                      <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                        +{item.possibleMatches.length - 1} padanan lain
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-amber-800 font-semibold bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300">
+                                    ⚠️ Tiada padanan automatik (Sila padankan manual)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              <button
+                                onClick={() => {
+                                  setActiveResolvingSubmission(item);
+                                  setSelectedCandidateStudent(topMatch || null);
+                                }}
+                                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>{topMatch ? 'Sahkan / Semak' : 'Padankan Manual'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteSubmission(item)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-xl transition border border-red-200 cursor-pointer"
+                                title="Buang terus cubaan jawab pelajar ini dari sistem"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                            <button
-                              onClick={() => {
-                                setActiveResolvingSubmission(item);
-                                const matchInRoster = item.possibleMatches?.[0] || students[0] || null;
-                                setSelectedCandidateStudent(matchInRoster);
-                              }}
-                              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
-                            >
-                              <span>Sahkan Murid</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteSubmission(item)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-xl transition border border-red-200 cursor-pointer"
-                              title="Buang terus tugasan pelajar ini dari sistem"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -2256,15 +2314,16 @@ export default function SemakanGuru({
 
               <div>
                 <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2.5">
-                  Pilih Pelajar Google Classroom Yang Betul:
+                  Padankan Dengan Pelajar Google Classroom:
                 </label>
 
-                <div className="space-y-2">
-                  {/* Cadangan Padanan Hampir */}
-                  {activeResolvingSubmission.possibleMatches && activeResolvingSubmission.possibleMatches.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Cadangan Padanan Nama Hampir:
+                <div className="space-y-3">
+                  {/* Cadangan Padanan Hampir Jika Ada */}
+                  {activeResolvingSubmission.possibleMatches && activeResolvingSubmission.possibleMatches.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+                        <span>🎯 Cadangan Padanan Ditemui ({activeResolvingSubmission.possibleMatches.length}):</span>
+                        <span className="text-[10px] text-slate-400">Pilih padanan yang sepadan</span>
                       </div>
                       {activeResolvingSubmission.possibleMatches.map((cand: any, cIdx: number) => {
                         const isSelected = selectedCandidateStudent?.userId === cand.userId || selectedCandidateStudent?.fullName === cand.fullName;
@@ -2273,7 +2332,7 @@ export default function SemakanGuru({
                             key={`cand-${cIdx}`}
                             className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
                               isSelected 
-                                ? 'border-blue-500 bg-blue-50/70 shadow-xs' 
+                                ? 'border-emerald-500 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-500/20' 
                                 : 'border-slate-200 hover:border-slate-300 bg-white'
                             }`}
                           >
@@ -2283,26 +2342,36 @@ export default function SemakanGuru({
                                 name="candidateRadio"
                                 checked={isSelected}
                                 onChange={() => setSelectedCandidateStudent(cand)}
-                                className="text-blue-600 focus:ring-blue-500"
+                                className="text-emerald-600 focus:ring-emerald-500"
                               />
                               <div>
-                                <div className="font-bold text-xs text-slate-900">{cand.fullName}</div>
-                                <div className="text-[10px] font-mono text-slate-400">{cand.email || 'Tiada e-mel'}</div>
+                                <div className="font-extrabold text-xs text-slate-900">{cand.fullName}</div>
+                                <div className="text-[10px] font-mono text-slate-500">{cand.email || 'Tiada e-mel'}</div>
                               </div>
                             </div>
-                            <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200">
-                              Cadangan #{cIdx + 1}
+                            <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                              Padanan #{cIdx + 1}
                             </span>
                           </label>
                         );
                       })}
                     </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                      <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                        <span>🔍</span> Tiada Padanan Automatik Ditemui
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-amber-800">
+                        Sistem tidak menjumpai padanan nama automatik bagi <strong>"{activeResolvingSubmission.rawTypedName || activeResolvingSubmission.nama}"</strong>. Sila pilih pelajar yang betul secara manual daripada senarai kelas di bawah:
+                      </p>
+                    </div>
                   )}
 
-                  {/* Dropdown semua murid kelas */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                      Atau Pilih Daripada Keseluruhan Pelajar Kelas:
+                  {/* Dropdown semua murid kelas untuk manual pairing */}
+                  <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                    <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+                      <span>Pilih Pelajar Secara Manual (Senarai Kelas):</span>
+                      <span className="text-[10px] text-slate-400">{students.length} Pelajar</span>
                     </div>
                     <select
                       value={selectedCandidateStudent?.userId || ''}
@@ -2316,7 +2385,7 @@ export default function SemakanGuru({
                           });
                         }
                       }}
-                      className="w-full text-xs font-semibold p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full text-xs font-bold p-2.5 border-2 border-slate-300 rounded-xl bg-white text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs"
                     >
                       <option value="">-- Pilih Pelajar Dari Senarai Kelas --</option>
                       {students.map(s => (
@@ -2325,6 +2394,13 @@ export default function SemakanGuru({
                         </option>
                       ))}
                     </select>
+
+                    {selectedCandidateStudent && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-center gap-2">
+                        <span className="font-bold text-emerald-700">✓ Dipilih:</span>
+                        <span className="font-extrabold">{selectedCandidateStudent.fullName}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2335,10 +2411,10 @@ export default function SemakanGuru({
                 type="button"
                 disabled={isVerifying}
                 onClick={() => handleDeleteSubmission(activeResolvingSubmission)}
-                className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-red-200"
+                className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 text-xs font-black px-3.5 py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-red-200 active:scale-95"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Buang Tugasan Ini Dari Sistem</span>
+                <span>Delete / Buang Cubaan Jawab</span>
               </button>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -2356,14 +2432,14 @@ export default function SemakanGuru({
                   type="button"
                   disabled={!selectedCandidateStudent || isVerifying}
                   onClick={() => handleConfirmStudent(activeResolvingSubmission, selectedCandidateStudent)}
-                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2.5 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                 >
                   {isVerifying ? (
                     <span>Mengesahkan...</span>
                   ) : (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      <span>Sahkan Pelajar Ini</span>
+                      <span>Sahkan & Daftar Nama</span>
                     </>
                   )}
                 </button>

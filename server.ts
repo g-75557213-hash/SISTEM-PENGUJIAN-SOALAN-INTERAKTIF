@@ -58,6 +58,7 @@ try {
 const inMemoryTugasanUmum = new Map<string, any>();
 const inMemorySubmissions = new Map<string, any>();
 const inMemoryClassroomRosters = new Map<string, any>();
+const inMemoryNameAliases = new Map<string, any>();
 
 const FieldValue = {
   serverTimestamp: () => "SERVER_TIMESTAMP_PLACEHOLDER"
@@ -184,6 +185,98 @@ class DbAdapter {
 
 const db = new DbAdapter();
 
+function normalizeRawName(name: string): string {
+  return String(name || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+function cleanAliasKey(name: string): string {
+  return String(name || '')
+    .toUpperCase()
+    .replace(/\b(BIN|BINTI|BT|B|ANAK|A\/L|A\/P|MD|MOHD|MUHAMMAD|NUR|NIK|WAN|SITI|ENGKU|CHE)\b/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function calculateFuzzyScore(a: string, b: string): number {
+  const normA = cleanAliasKey(a);
+  const normB = cleanAliasKey(b);
+  if (!normA || !normB) return 0;
+  if (normA === normB) return 100;
+  if (normB.includes(normA) || normA.includes(normB)) return 90;
+
+  const wordsA = normA.split(' ').filter(Boolean);
+  const wordsB = normB.split(' ').filter(Boolean);
+  const common = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb)));
+  if (common.length > 0) {
+    return Math.round((common.length / Math.max(wordsA.length, wordsB.length)) * 85);
+  }
+  return 0;
+}
+
+async function findStudentAlias(courseId: string | undefined, typedName: string): Promise<any | null> {
+  const rawKey = normalizeRawName(typedName);
+  if (!rawKey) return null;
+
+  const courseKey = `${courseId || 'ALL'}_${rawKey}`;
+  const globalKey = `ALL_${rawKey}`;
+
+  // Check in-memory first
+  if (inMemoryNameAliases.has(courseKey)) {
+    return inMemoryNameAliases.get(courseKey);
+  }
+  if (inMemoryNameAliases.has(globalKey)) {
+    return inMemoryNameAliases.get(globalKey);
+  }
+
+  // Check Firestore
+  try {
+    const courseDoc = await db.collection("name_aliases").doc(`alias_${courseId || 'ALL'}_${encodeURIComponent(rawKey)}`).get();
+    if (courseDoc.exists && courseDoc.data()) {
+      const data = courseDoc.data();
+      inMemoryNameAliases.set(courseKey, data);
+      return data;
+    }
+
+    const globalDoc = await db.collection("name_aliases").doc(`alias_ALL_${encodeURIComponent(rawKey)}`).get();
+    if (globalDoc.exists && globalDoc.data()) {
+      const data = globalDoc.data();
+      inMemoryNameAliases.set(globalKey, data);
+      return data;
+    }
+  } catch (err) {
+    console.warn("Notice checking alias in Firestore:", err);
+  }
+
+  return null;
+}
+
+async function saveStudentAlias(courseId: string | undefined, typedName: string, student: { userId: string; fullName: string; email: string }) {
+  const rawKey = normalizeRawName(typedName);
+  if (!rawKey) return;
+
+  const aliasRecord = {
+    rawTypedName: rawKey,
+    courseId: courseId || '',
+    userId: student.userId,
+    fullName: String(student.fullName).trim().toUpperCase(),
+    email: (student.email || '').trim().toLowerCase(),
+    confirmedAt: new Date().toLocaleString('ms-MY', { timeZone: 'Asia/Kuala_Lumpur' })
+  };
+
+  const courseKey = `${courseId || 'ALL'}_${rawKey}`;
+  const globalKey = `ALL_${rawKey}`;
+
+  inMemoryNameAliases.set(courseKey, aliasRecord);
+  inMemoryNameAliases.set(globalKey, aliasRecord);
+
+  try {
+    await db.collection("name_aliases").doc(`alias_${courseId || 'ALL'}_${encodeURIComponent(rawKey)}`).set(aliasRecord, { merge: true });
+    await db.collection("name_aliases").doc(`alias_ALL_${encodeURIComponent(rawKey)}`).set(aliasRecord, { merge: true });
+  } catch (err) {
+    console.warn("Notice saving alias to Firestore:", err);
+  }
+}
 
 export const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -354,8 +447,63 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
       // For Google Classroom submissions
       if (isGCMode) {
-        const studentName = String(matchedClassroomName || nama || rawTypedName || 'PELAJAR').trim().toUpperCase();
-        const safeStudentId = matchedStudentId || encodeURIComponent(studentName);
+        const rawName = String(rawTypedName || nama || 'PELAJAR').trim().toUpperCase();
+
+        // 1. Check if there is an existing confirmed alias for this short name
+        const existingAlias = await findStudentAlias(courseId, rawName);
+
+        let studentName: string;
+        let safeStudentId: string;
+        let finalEmail: string;
+        let finalVerificationStatus: string;
+        let autoMapped = false;
+
+        if (existingAlias) {
+          // Previously confirmed by teacher! Auto-register directly without teacher confirmation!
+          studentName = existingAlias.fullName;
+          safeStudentId = existingAlias.userId;
+          finalEmail = existingAlias.email || (email ? String(email).trim().toLowerCase() : '');
+          finalVerificationStatus = 'verified';
+          autoMapped = true;
+        } else if (verificationStatus === 'verified' && matchedStudentId) {
+          // Pre-verified by Delima Chrome account detection or exact match
+          studentName = String(matchedClassroomName || nama || rawName).trim().toUpperCase();
+          safeStudentId = matchedStudentId;
+          finalEmail = email ? String(email).trim().toLowerCase() : '';
+          finalVerificationStatus = 'verified';
+          autoMapped = false;
+        } else {
+          // Short name entered manually by student and not yet approved by teacher:
+          // ALWAYS RECORD SCORE IMMEDIATELY!
+          studentName = rawName;
+          safeStudentId = matchedStudentId || encodeURIComponent(rawName);
+          finalEmail = email ? String(email).trim().toLowerCase() : '';
+          finalVerificationStatus = 'pending_teacher_approval';
+          autoMapped = false;
+        }
+
+        // Determine possible candidate matches if pending teacher approval
+        let finalPossibleMatches = Array.isArray(possibleMatches) ? possibleMatches : [];
+        if (finalVerificationStatus === 'pending_teacher_approval' && finalPossibleMatches.length === 0 && courseId) {
+          const roster = inMemoryClassroomRosters.get(String(courseId).trim());
+          if (roster && Array.isArray(roster.students)) {
+            finalPossibleMatches = roster.students
+              .map((st: any) => {
+                const fullName = st.profile?.name?.fullName || st.fullName || '';
+                const score = calculateFuzzyScore(rawName, fullName);
+                return {
+                  userId: st.userId,
+                  fullName,
+                  email: st.profile?.emailAddress || st.email || '',
+                  score
+                };
+              })
+              .filter((m: any) => m.score >= 45)
+              .sort((a: any, b: any) => b.score - a.score)
+              .slice(0, 5);
+          }
+        }
+
         const docId = `gc_${courseId || 'GC'}_${safeStudentId}_${qid || 'QUIZ'}`;
 
         const dataToSave = {
@@ -366,14 +514,15 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
           courseId: courseId ? String(courseId).trim() : '',
           courseWorkId: courseWorkId ? String(courseWorkId).trim() : '',
           nama: studentName,
-          rawTypedName: rawTypedName ? String(rawTypedName).trim().toUpperCase() : studentName,
-          matchedClassroomName: matchedClassroomName ? String(matchedClassroomName).trim().toUpperCase() : studentName,
-          matchedStudentId: matchedStudentId || '',
-          email: email ? String(email).trim().toLowerCase() : '',
+          rawTypedName: rawName,
+          matchedClassroomName: studentName,
+          matchedStudentId: safeStudentId,
+          email: finalEmail,
           status: status || 'Selesai Menjawab',
           markah: markah !== undefined && markah !== null ? Number(markah) : null,
-          verificationStatus: verificationStatus || (matchedClassroomName ? 'verified' : 'pending_teacher_approval'),
-          possibleMatches: Array.isArray(possibleMatches) ? possibleMatches : [],
+          verificationStatus: finalVerificationStatus,
+          possibleMatches: finalPossibleMatches,
+          autoMapped,
           sijilBase64: sijilBase64 || null,
           isUmum: false,
           isClassroom: true,
@@ -395,7 +544,10 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
         return res.json({ 
           success: true, 
-          message: "Markah Google Classroom berjaya disimpan",
+          message: autoMapped 
+            ? "Markah murid berjaya dikemaskini terus mengikut padanan nama Google Classroom yang telah disahkan."
+            : "Markah murid berjaya direkodkan serta-merta.",
+          autoMapped,
           verificationStatus: dataToSave.verificationStatus,
           submissionId: docId
         });
@@ -530,7 +682,7 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         } catch (dbErr) {
           console.warn("Firestore delete submission notice:", dbErr);
         }
-        return res.json({ success: true, message: "Tugasan murid berjaya dibuang dari sistem." });
+        return res.json({ success: true, message: "Cubaan jawab murid berjaya dibuang dari sistem." });
       }
 
       if (action === 'confirm') {
@@ -539,6 +691,15 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
         }
 
         const existing = inMemorySubmissions.get(submissionId) || {};
+        const rawName = String(existing.rawTypedName || existing.nama || '').trim().toUpperCase();
+
+        // 1. Permanently register alias so future short-name submissions are auto-mapped directly
+        await saveStudentAlias(existing.courseId, rawName, {
+          userId: confirmedStudent.userId,
+          fullName: confirmedStudent.fullName,
+          email: confirmedStudent.email || existing.email || ''
+        });
+
         const updated = {
           ...existing,
           verificationStatus: 'verified',
@@ -551,18 +712,32 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
         inMemorySubmissions.set(submissionId, updated);
 
+        // Also if we have a student-id specific docId, save under that key too
+        const studentDocId = `gc_${existing.courseId || 'GC'}_${confirmedStudent.userId}_${existing.qid || 'QUIZ'}`;
+        if (studentDocId !== submissionId) {
+          inMemorySubmissions.set(studentDocId, { ...updated, id: studentDocId });
+        }
+
         try {
           await db.collection("submissions").doc(submissionId).set({
             ...updated,
             updatedAt: FieldValue.serverTimestamp()
           }, { merge: true });
+
+          if (studentDocId !== submissionId) {
+            await db.collection("submissions").doc(studentDocId).set({
+              ...updated,
+              id: studentDocId,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
         } catch (dbErr) {
           console.warn("Firestore update submission notice:", dbErr);
         }
 
         return res.json({ 
           success: true, 
-          message: "Murid berjaya disahkan dan didaftarkan sebagai nama penuh rasmi Google Classroom.",
+          message: `Murid berjaya disahkan dan nama "${rawName}" telah didaftarkan ke Google Classroom untuk pengemaskinian markah automatik.`,
           updated
         });
       }
@@ -571,6 +746,21 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     } catch (error) {
       console.error("Error verifying student submission:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Check alias endpoint for client-side auto-resolution
+  app.get("/api/check-alias", async (req, res) => {
+    try {
+      const { courseId, name } = req.query;
+      if (!name) return res.json({ found: false });
+      const alias = await findStudentAlias(courseId as string, name as string);
+      if (alias) {
+        return res.json({ found: true, alias });
+      }
+      return res.json({ found: false });
+    } catch (e) {
+      return res.json({ found: false });
     }
   });
 
@@ -934,12 +1124,30 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
 
   app.get("/api/submissions", async (req, res) => {
     try {
-      const { qid } = req.query;
-      if (!qid) return res.status(400).json({ error: "Missing qid" });
-      const snapshot = await db.collection("submissions").where("qid", "==", qid).get();
-      const submissions: any[] = [];
-      snapshot.forEach(doc => submissions.push(doc.data()));
-      res.json(submissions);
+      const { qid, courseId } = req.query;
+      const subsMap = new Map<string, any>();
+
+      inMemorySubmissions.forEach((val, key) => {
+        let match = true;
+        if (qid && val.qid !== qid) match = false;
+        if (courseId && val.courseId !== courseId) match = false;
+        if (match) subsMap.set(key, { ...val, id: key });
+      });
+
+      try {
+        let q: any = db.collection("submissions");
+        if (qid) q = q.where("qid", "==", String(qid));
+        if (courseId) q = q.where("courseId", "==", String(courseId));
+        const snapshot = await q.get();
+        snapshot.forEach((doc: any) => {
+          const d = doc.data();
+          if (d) subsMap.set(doc.id, { ...d, id: doc.id });
+        });
+      } catch (err) {
+        console.warn("Notice fetching submissions:", err);
+      }
+
+      res.json(Array.from(subsMap.values()));
     } catch (error) {
       console.error("Error fetching submissions:", error);
       res.status(500).json({ error: "Internal server error" });
