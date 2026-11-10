@@ -49,17 +49,6 @@ export default function StudentView({
   // ==========================================
   // GOOGLE CLASSROOM INTEGRATION STATES
   // ==========================================
-  const [classRoster, setClassRoster] = useState<RosterStudent[]>([]);
-  const [courseName, setCourseName] = useState<string>(currentKelasParam || '');
-  const [isLoadingRoster, setIsLoadingRoster] = useState(false);
-  const [detectedStudent, setDetectedStudent] = useState<{
-    userId?: string;
-    fullName: string;
-    email: string;
-    photoUrl?: string;
-    isExactRosterMatch?: boolean;
-  } | null>(null);
-
   interface MoeAccount {
     email: string;
     fullName: string;
@@ -67,11 +56,6 @@ export default function StudentView({
     photoUrl?: string;
     isExactRosterMatch?: boolean;
   }
-
-  const [moeAccounts, setMoeAccounts] = useState<MoeAccount[]>([]);
-  const [isChoosingAccount, setIsChoosingAccount] = useState<boolean>(false);
-  const [isDetectingAccount, setIsDetectingAccount] = useState<boolean>(false);
-  const autoDetectAttemptedRef = useRef(false);
 
   const isTeacherEmail = (email: string) => {
     const e = (email || '').toLowerCase().trim();
@@ -106,16 +90,128 @@ export default function StudentView({
     return [];
   };
 
+  const getAllCachedAccounts = (cid?: string): MoeAccount[] => {
+    const combinedMap = new Map<string, MoeAccount>();
+
+    // 1. Stored accounts in known_moe_student_accounts
+    try {
+      const raw = localStorage.getItem('known_moe_student_accounts');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((acc: any) => {
+            if (acc && (acc.email || acc.fullName)) {
+              const k = (acc.email || acc.fullName).toLowerCase().trim();
+              combinedMap.set(k, acc);
+            }
+          });
+        }
+      }
+    } catch (e) {}
+
+    // 2. Class roster for this course if cached
+    if (cid) {
+      try {
+        const cachedRoster = localStorage.getItem(`cached_roster_${cid}`);
+        if (cachedRoster) {
+          const parsed = JSON.parse(cachedRoster);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((s: any) => {
+              if (s && s.fullName) {
+                const k = (s.email || s.fullName).toLowerCase().trim();
+                if (!combinedMap.has(k)) {
+                  combinedMap.set(k, {
+                    email: s.email || '',
+                    fullName: s.fullName,
+                    userId: s.userId,
+                    photoUrl: s.photoUrl,
+                    isExactRosterMatch: true
+                  });
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. Other cached rosters
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('cached_roster_')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((s: any) => {
+                if (s && s.fullName) {
+                  const k = (s.email || s.fullName).toLowerCase().trim();
+                  if (!combinedMap.has(k)) {
+                    combinedMap.set(k, {
+                      email: s.email || '',
+                      fullName: s.fullName,
+                      userId: s.userId,
+                      photoUrl: s.photoUrl,
+                      isExactRosterMatch: false
+                    });
+                  }
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    return sortAccountsWithMoePriority(Array.from(combinedMap.values()));
+  };
+
   const saveMoeAccount = (account: MoeAccount) => {
     try {
       const current = getStoredMoeAccounts();
       const cleanEmail = (account.email || '').toLowerCase().trim();
       if (!cleanEmail) return;
       const filtered = current.filter(a => (a.email || '').toLowerCase().trim() !== cleanEmail);
-      const updated = [account, ...filtered].slice(0, 12);
+      const updated = [account, ...filtered].slice(0, 15);
       localStorage.setItem('known_moe_student_accounts', JSON.stringify(updated));
     } catch (e) {}
   };
+
+  const [classRoster, setClassRoster] = useState<RosterStudent[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const cid = initialCourseId || (new URLSearchParams(window.location.search)).get('courseId') || '';
+      if (cid) {
+        const cached = localStorage.getItem(`cached_roster_${cid}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [courseName, setCourseName] = useState<string>(currentKelasParam || '');
+  const [isLoadingRoster, setIsLoadingRoster] = useState(false);
+  const [detectedStudent, setDetectedStudent] = useState<{
+    userId?: string;
+    fullName: string;
+    email: string;
+    photoUrl?: string;
+    isExactRosterMatch?: boolean;
+  } | null>(null);
+
+  const [moeAccounts, setMoeAccounts] = useState<MoeAccount[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const cid = initialCourseId || (new URLSearchParams(window.location.search)).get('courseId') || '';
+    return getAllCachedAccounts(cid);
+  });
+
+  const [isChoosingAccount, setIsChoosingAccount] = useState<boolean>(true);
+  const [isDetectingAccount, setIsDetectingAccount] = useState<boolean>(false);
+  const autoDetectAttemptedRef = useRef(false);
 
   const [confirmedStudent, setConfirmedStudent] = useState<{
     userId?: string;
@@ -154,14 +250,25 @@ export default function StudentView({
   useEffect(() => {
     if (!isGCMode || !currentCourseId) return;
 
+    let isMounted = true;
     const fetchRoster = async () => {
       try {
         setIsLoadingRoster(true);
-        const res = await fetch(`/api/classroom-roster?courseId=${encodeURIComponent(currentCourseId)}`);
-        if (res.ok) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        const res = await fetch(`/api/classroom-roster?courseId=${encodeURIComponent(currentCourseId)}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok && isMounted) {
           const data = await res.json();
-          if (Array.isArray(data.students)) {
+          if (Array.isArray(data.students) && data.students.length > 0) {
             setClassRoster(data.students);
+            try {
+              localStorage.setItem(`cached_roster_${currentCourseId}`, JSON.stringify(data.students));
+            } catch (e) {}
           }
           if (data.courseName) {
             setCourseName(data.courseName);
@@ -170,11 +277,12 @@ export default function StudentView({
       } catch (err) {
         console.warn("Notice fetching classroom roster:", err);
       } finally {
-        setIsLoadingRoster(false);
+        if (isMounted) setIsLoadingRoster(false);
       }
     };
 
     fetchRoster();
+    return () => { isMounted = false; };
   }, [isGCMode, currentCourseId]);
 
   // Clean string helper for name normalization
@@ -190,7 +298,7 @@ export default function StudentView({
   useEffect(() => {
     if (!isGCMode) return;
 
-    let stored = getStoredMoeAccounts();
+    let stored = getAllCachedAccounts(currentCourseId);
 
     // If active user is signed in, record their account
     if (user) {
@@ -212,7 +320,7 @@ export default function StudentView({
         };
 
         saveMoeAccount(studentAcc);
-        stored = getStoredMoeAccounts();
+        stored = getAllCachedAccounts(currentCourseId);
       }
     }
 
@@ -229,13 +337,13 @@ export default function StudentView({
 
     // Add stored accounts
     stored.forEach(acc => {
-      const key = (acc.email || acc.fullName).toLowerCase();
+      const key = (acc.email || acc.fullName).toLowerCase().trim();
       combinedMap.set(key, acc);
     });
 
     // Add roster accounts
     rosterAccounts.forEach(acc => {
-      const key = (acc.email || acc.fullName).toLowerCase();
+      const key = (acc.email || acc.fullName).toLowerCase().trim();
       if (!combinedMap.has(key)) {
         combinedMap.set(key, acc);
       } else {
@@ -254,14 +362,8 @@ export default function StudentView({
     const allAccounts = Array.from(combinedMap.values());
     const sorted = sortAccountsWithMoePriority(allAccounts);
     setMoeAccounts(sorted);
-
-    const activeEmail = (user?.email || '').toLowerCase().trim();
-    const activeIsTeacher = isTeacherEmail(activeEmail);
-
-    // Keep detectedStudent null initially so student can select from list
-    setDetectedStudent(null);
     setIsChoosingAccount(true);
-  }, [user, classRoster, isGCMode]);
+  }, [user, classRoster, isGCMode, currentCourseId]);
 
   // Compute fuzzy matches whenever manual input name changes
   useEffect(() => {
@@ -763,7 +865,7 @@ export default function StudentView({
 
             {/* A. GOOGLE ACCOUNTS DETECTED IN CHROME */}
             {moeAccounts.length > 0 ? (
-              <div className="space-y-2 mb-3">
+              <div className="space-y-1.5 mb-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1">
                     <span>👤</span> Pilih Akaun Google Murid ({moeAccounts.length}):
@@ -773,7 +875,7 @@ export default function StudentView({
                   </span>
                 </div>
 
-                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
                   {moeAccounts.map((acc, idx) => {
                     const isMoe = isMoeAccount(acc.email);
                     return (
@@ -781,14 +883,14 @@ export default function StudentView({
                         key={acc.email || idx}
                         type="button"
                         onClick={() => selectStudentAccount(acc)}
-                        className={`w-full text-left p-2 sm:p-2.5 rounded-xl transition shadow-2xs group flex items-center justify-between cursor-pointer active:scale-98 border ${
+                        className={`w-full text-left py-1.5 px-2.5 rounded-xl transition shadow-2xs group flex items-center justify-between cursor-pointer active:scale-98 border ${
                           isMoe 
                             ? 'bg-emerald-50/90 border-emerald-300 hover:bg-emerald-100/90 hover:border-emerald-400' 
                             : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg text-white font-black text-[11px] flex items-center justify-center shrink-0 shadow-2xs ${
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-7 h-7 rounded-lg text-white font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs ${
                             isMoe ? 'bg-gradient-to-tr from-emerald-600 to-teal-700' : 'bg-gradient-to-tr from-slate-500 to-slate-700'
                           }`}>
                             {acc.photoUrl ? (
@@ -797,15 +899,15 @@ export default function StudentView({
                               acc.fullName.slice(0, 2).toUpperCase()
                             )}
                           </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="min-w-0 leading-tight">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <span className={`font-black text-xs truncate uppercase ${
                                 isMoe ? 'text-emerald-950 group-hover:text-emerald-900' : 'text-slate-900 group-hover:text-slate-800'
                               }`}>
                                 {acc.fullName}
                               </span>
                               {isMoe && (
-                                <span className="text-[9px] font-black bg-emerald-600 text-white px-1.5 py-0.2 rounded-full tracking-wider flex items-center gap-0.5">
+                                <span className="text-[8px] font-black bg-emerald-600 text-white px-1 py-0.2 rounded-full tracking-wider flex items-center gap-0.5">
                                   <span>⭐</span> MOE
                                 </span>
                               )}
@@ -819,7 +921,7 @@ export default function StudentView({
                             )}
                           </div>
                         </div>
-                        <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border shrink-0 ml-1.5 transition ${
+                        <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md border shrink-0 ml-1.5 transition ${
                           isMoe 
                             ? 'bg-emerald-600 text-white border-emerald-600 group-hover:bg-emerald-700' 
                             : 'bg-slate-100 text-slate-700 border-slate-200 group-hover:bg-slate-200'
@@ -831,14 +933,14 @@ export default function StudentView({
                   })}
                 </div>
               </div>
-            ) : (
-              <div className="mb-3 p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-center flex flex-col items-center justify-center gap-1.5 shadow-2xs">
-                <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-xs text-emerald-950 font-extrabold">
-                  Sedang Mengesan Akaun Google Chrome...
-                </p>
+            ) : isLoadingRoster ? (
+              <div className="mb-3 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-center flex items-center justify-center gap-2">
+                <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-[11px] text-slate-600 font-bold">
+                  Menyemak senarai murid kelas...
+                </span>
               </div>
-            )}
+            ) : null}
 
             {/* B. DIVIDER */}
             <div className="relative my-4 flex items-center justify-center">

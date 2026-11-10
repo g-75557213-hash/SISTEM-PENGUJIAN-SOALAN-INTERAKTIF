@@ -1470,304 +1470,41 @@ export default function SemakanGuru({
       </div>
 
       {activeSemakanTab === 'umum' ? (
-        <div className="flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-5">
-          {/* STATS OVERVIEW */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
-                👥
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Murid Menjawab</div>
-                <div className="text-2xl font-black text-slate-800">{filteredUmumSubmissions.length}</div>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
-                📊
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Purata Markah</div>
-                <div className="text-2xl font-black text-emerald-600">
-                  {filteredUmumSubmissions.length > 0 
-                    ? Math.round(filteredUmumSubmissions.reduce((acc, s) => acc + (s.markah || 0), 0) / filteredUmumSubmissions.length) 
-                    : 0}%
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-6">
+          {/* BAHAGIAN 1: SENARAI TUGASAN UMUM TELAH DIJANA */}
+          <div className="bg-white rounded-3xl border-2 border-emerald-200/80 shadow-sm p-5 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                  🔗
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-200">
+                      Bahagian 1
+                    </span>
+                    <h3 className="font-extrabold text-base sm:text-lg text-slate-800">
+                      Senarai Tugasan Umum Telah Dijana
+                    </h3>
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      {tugasanUmumList.length} Tugasan Aktif
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    Pautan terus untuk diedarkan kepada murid. Murid boleh menjawab tanpa perlu login akaun Google.
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">
-                📁
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tugasan Dicipta</div>
-                <div className="text-2xl font-black text-slate-800">{tugasanUmumList.length}</div>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
-                🎯
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Lulus (&ge;40%)</div>
-                <div className="text-2xl font-black text-amber-600">
-                  {filteredUmumSubmissions.filter(s => (s.markah || 0) >= 40).length}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* CONTROLS & FILTER BAR */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-            <div className="flex flex-wrap items-center gap-2.5 flex-1">
-              {/* Filter Kod */}
-              <select
-                value={filterUmumKod}
-                onChange={(e) => setFilterUmumKod(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua Kod Tugasan ({tugasanUmumList.length})</option>
-                {tugasanUmumList.map(t => (
-                  <option key={t.kod} value={t.kod}>
-                    {t.kod} - {t.kelas} ({t.subjek} • {t.bab})
-                  </option>
-                ))}
-              </select>
-
-              {/* Filter Kelas */}
-              <select
-                value={filterUmumKelas}
-                onChange={(e) => setFilterUmumKelas(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">Semua Kelas</option>
-                {uniqueUmumClasses.map(k => (
-                  <option key={k} value={k}>{k}</option>
-                ))}
-              </select>
-
-              {/* Search */}
-              <div className="relative flex-1 min-w-[180px]">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input 
-                  type="text"
-                  value={searchUmumStudent}
-                  onChange={(e) => setSearchUmumStudent(e.target.value)}
-                  placeholder="Cari nama pelajar / kelas..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <a
-                href={`https://docs.google.com/spreadsheets/d/${spreadsheetId || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A'}/edit`}
-                target="_blank"
-                rel="noreferrer"
-                className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-xs"
-                title="Buka tab TUGASAN UMUM dalam Google Sheets"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Buka Tab Spreadsheet (TUGASAN UMUM)</span>
-                <ExternalLink className="w-3 h-3 text-slate-400" />
-              </a>
-
-              <button
-                onClick={loadTugasanUmumData}
-                disabled={loadingUmum}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
-                title="Segerak semula rekod dari pelayan & tab TUGASAN UMUM Google Sheets"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingUmum ? 'animate-spin' : ''}`} />
-                <span>Segerak Sheets</span>
-              </button>
-
-              <button
-                onClick={handleCopyUmumMarksText}
-                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Copy className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{copiedUmumMarks ? '✓ Disalin' : 'Salin Markah'}</span>
-              </button>
-
-              <button
-                onClick={handleExportUmumCSV}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Eksport CSV</span>
-              </button>
-            </div>
-          </div>
-
-          {/* SUBMISSIONS TABLE */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
-              <div className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
-                <span>📋</span> Senarai Markah Tugasan Umum ({filteredUmumSubmissions.length})
-                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Tab "TUGASAN UMUM"
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500 font-medium">
-                Nama direkod dalam <strong>HURUF BESAR</strong> tanpa memerlukan login Chrome
-              </div>
-            </div>
-
-            {loadingUmum ? (
-              <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-2">
-                <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-                <span>Memuat turun data markah...</span>
-              </div>
-            ) : filteredUmumSubmissions.length === 0 ? (
-              <div className="p-12 text-center text-slate-500">
-                <div className="text-3xl mb-2">📭</div>
-                <div className="font-bold text-slate-700 text-base">Tiada Rekod Pelajar Dijumpai</div>
-                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
-                  Belum ada murid yang menghantar jawapan untuk penapis ini. Kongsikan <span className="font-bold text-slate-600">Link Tugasan Umum</span> dari Bank Soalan kepada murid untuk mula merekod markah.
+            {tugasanUmumList.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-500 font-medium">
+                  Tiada tugasan umum dicipta lagi. Pergi ke tab <strong className="text-slate-700">Bank Soalan</strong> di atas, pilih soalan dan klik butang <strong className="text-emerald-700">Tugasan Umum</strong> untuk menjana pautan pertama.
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-4 w-12 text-center">#</th>
-                      <th className="py-3 px-4">Nama Penuh Pelajar (Huruf Besar)</th>
-                      <th className="py-3 px-4">Kelas</th>
-                      <th className="py-3 px-4">Kod Tugasan</th>
-                      <th className="py-3 px-4">Tajuk / Topik Soalan</th>
-                      <th className="py-3 px-4 text-center">Markah (%)</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4 text-right">Tarikh & Masa</th>
-                      <th className="py-3 px-3 text-center w-12">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredUmumSubmissions.map((sub, idx) => {
-                      const assn = tugasanUmumList.find(a => a.kod === sub.kod);
-                      const parsedMark = sub.markah !== null && sub.markah !== undefined ? parseFloat(String(sub.markah).replace('%', '')) : null;
-                      const mark = (parsedMark !== null && !isNaN(parsedMark)) ? parsedMark : null;
-                      
-                      let markColor = "bg-slate-100 text-slate-700 border-slate-200";
-                      let markLabel = "-";
-                      if (mark !== null) {
-                        if (mark >= 80) markColor = "bg-emerald-100 text-emerald-800 border-emerald-300 font-black";
-                        else if (mark >= 60) markColor = "bg-blue-100 text-blue-800 border-blue-300 font-bold";
-                        else if (mark >= 40) markColor = "bg-amber-100 text-amber-800 border-amber-300 font-bold";
-                        else markColor = "bg-red-100 text-red-800 border-red-300 font-bold";
-                        markLabel = `${mark}%`;
-                      }
-
-                      const subKey = `${(sub.kod || '').trim().toUpperCase()}_${(sub.nama || '').trim().toUpperCase()}`;
-
-                      return (
-                        <tr key={sub.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3.5 px-4 text-center text-slate-400 font-mono font-medium">
-                            {idx + 1}
-                          </td>
-                          <td className="py-3.5 px-4 font-black text-slate-900 uppercase tracking-wide">
-                            <span>{sub.nama}</span>
-                            {(sub.isSites || sub.source === 'Google Sites' || (sub.kod && sub.kod.startsWith('GS-')) || sub.kod && sub.kod.startsWith('TU-')) && (
-                              <span className="ml-2 inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300">
-                                🌐 Mod Umum
-                              </span>
-                            )}
-                            {sub.fromSheet && (
-                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                Tab Sheets
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded-lg border border-slate-200 text-[11px]">
-                              {sub.kelas || '-'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold text-[11px]">
-                              {sub.kod || '-'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate" title={assn?.bab || sub.qid}>
-                            {assn ? `${assn.subjek} - ${assn.bab}` : (sub.qid || '-')}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs border ${markColor}`}>
-                              {markLabel}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            {(() => {
-                              const sStatus = (sub.status || '').toLowerCase();
-                              const isSedang = sStatus.includes('sedang');
-                              const isSelesai = sStatus.includes('selesai') || sStatus.includes('telah') || sub.markah !== null;
-                              
-                              if (isSedang) {
-                                return (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-900 border border-blue-300 shadow-2xs">
-                                    <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
-                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                                    </span>
-                                    Sedang Menjawab
-                                  </span>
-                                );
-                              } else if (isSelesai) {
-                                return (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                    <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-emerald-600"></span>
-                                    Selesai Menjawab
-                                  </span>
-                                );
-                              } else {
-                                return (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                    <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-amber-500"></span>
-                                    Belum Menjawab
-                                  </span>
-                                );
-                              }
-                            })()}
-                          </td>
-                          <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[11px]">
-                            {sub.updatedAt || '-'}
-                          </td>
-                          <td className="py-3.5 px-3 text-center">
-                            <button
-                              onClick={(e) => handleDeleteSingleUmumScore(sub, e)}
-                              disabled={deletingScoreKey === subKey}
-                              className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition disabled:opacity-40"
-                              title="Padam rekod markah murid ini dari sistem & Google Sheets"
-                            >
-                              {deletingScoreKey === subKey ? (
-                                <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* CREATED ASSIGNMENT MANAGEMENT SECTION */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
-            <h3 className="font-extrabold text-sm text-slate-800 mb-3 flex items-center gap-2">
-              <span>🔗</span> Pautan Tugasan Umum Sedia Ada ({tugasanUmumList.length})
-            </h3>
-            {tugasanUmumList.length === 0 ? (
-              <p className="text-xs text-slate-400">Tiada tugasan umum dicipta lagi. Pergi ke tab <span className="font-bold text-slate-600">Tugasan</span> di atas untuk menjana pautan umum.</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 {tugasanUmumList.map(t => {
                   const baseOrigin = window.location.origin.includes('ais-dev-') 
                     ? window.location.origin.replace('ais-dev-', 'ais-pre-') 
@@ -1776,73 +1513,403 @@ export default function SemakanGuru({
                   const subCount = tugasanUmumSubs.filter(s => s.kod === t.kod).length;
 
                   return (
-                    <div key={t.kod} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-emerald-300 transition-all">
+                    <div key={t.kod} className="bg-slate-50/90 hover:bg-white border-2 border-slate-200 hover:border-emerald-400 rounded-2xl p-4 flex flex-col justify-between transition-all shadow-xs hover:shadow-md">
                       <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-mono text-xs font-black bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono text-xs font-black bg-emerald-100 text-emerald-950 px-2.5 py-1 rounded-lg border border-emerald-300">
                             {t.kod}
                           </span>
-                          <span className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                            {subCount} Murid
+                          <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-2xs">
+                            👥 {subCount} Murid
                           </span>
                         </div>
-                        <div className="font-bold text-slate-800 text-xs line-clamp-1">{t.kelas}</div>
-                        <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{t.subjek} • {t.bab}</div>
+                        <div className="font-extrabold text-slate-900 text-sm line-clamp-1">{t.kelas}</div>
+                        <div className="text-xs text-slate-500 line-clamp-1 mt-0.5 font-medium">{t.subjek} • {t.bab}</div>
+                        
+                        {/* Compact Link Preview */}
+                        <div className="mt-2.5 p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono text-slate-500 truncate flex-1 select-all">
+                            {studentUrl}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="flex gap-1.5 mt-3 pt-2.5 border-t border-slate-200">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(studentUrl);
-                            alert(`Pautan murid untuk kelas ${t.kelas} berjaya disalin!`);
-                          }}
-                          className="flex-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 py-1.5 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition"
-                          title="Salin pautan terus murid"
-                        >
-                          <Copy className="w-3 h-3" />
-                          <span>Salin Link</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${(t.subjek || '').toUpperCase()} (${(t.tingkatan || '').toUpperCase()})*`;
-                            const waText = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${(t.kelas || '').toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${t.bab || t.soalanTajuk}\n🔑 *Kod Tugasan:* ${t.kod}\n\n👉 *Pautan Tugasan:*\n${studentUrl}\n\n✨ *PERHATIAN MURID:*\n✅ TIDAK PERLU LOG MASUK CHROME ATAU AKAUN GOOGLE.\n✅ Hanya masukkan NAMA PENUH dan KELAS sahaja untuk menjawab.\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
-                            navigator.clipboard.writeText(waText);
-                            alert(`Mesej WhatsApp untuk kelas ${t.kelas} berjaya disalin!`);
-                          }}
-                          className="bg-[#25D366] hover:bg-[#20ba5a] text-white py-1.5 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition shadow-xs"
-                          title="Salin teks hebahan WhatsApp"
-                        >
-                          <span>💬</span>
-                          <span>WA</span>
-                        </button>
+                      <div className="flex flex-col gap-2 mt-3.5 pt-3 border-t border-slate-200/80">
+                        {/* Action buttons: WhatsApp & Copy */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(studentUrl);
+                              alert(`Pautan murid bagi kelas ${t.kelas} berjaya disalin!`);
+                            }}
+                            className="flex-1 bg-white hover:bg-emerald-50 text-emerald-800 border-2 border-emerald-300 hover:border-emerald-500 py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                            title="Salin pautan terus murid"
+                          >
+                            <Copy className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Salin Link</span>
+                          </button>
 
-                        <a
-                          href={studentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center transition"
-                          title="Buka pautan murid"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                        <button
-                          onClick={(e) => handleDeleteUmumAssignment(t.kod, e)}
-                          disabled={deletingUmumKod === t.kod}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition disabled:opacity-40"
-                          title="Padam kod tugasan ini dari sistem & Google Sheets"
-                        >
-                          {deletingUmumKod === t.kod ? (
-                            <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                        </button>
+                          <button
+                            onClick={() => {
+                              const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${(t.subjek || '').toUpperCase()} (${(t.tingkatan || '').toUpperCase()})*`;
+                              const waText = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${(t.kelas || '').toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${t.bab || t.soalanTajuk || 'Kuiz Interaktif'}\n🔑 *Kod Tugasan:* ${t.kod}\n\n👉 *Pautan Tugasan:*\n${studentUrl}\n\n✨ *PERHATIAN MURID:*\n✅ TIDAK PERLU LOG MASUK CHROME ATAU AKAUN GOOGLE.\n✅ Hanya masukkan NAMA PENUH dan KELAS sahaja untuk menjawab.\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
+                              navigator.clipboard.writeText(waText);
+                              alert(`Mesej WhatsApp untuk kelas ${t.kelas} berjaya disalin! Anda boleh terus tampal ke WhatsApp.`);
+                            }}
+                            className="flex-1 bg-[#25D366] hover:bg-[#20ba5a] text-white py-2 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                            title="Salin mesej WhatsApp berformat"
+                          >
+                            <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.587-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.57 1.977 14.093.953 11.5.953c-5.44 0-9.865 4.371-9.87 9.799-.002 1.944.512 3.84 1.488 5.534l-.979 3.575 3.666-.962zm10.844-7.46c-.298-.15-1.766-.87-2.04-.97-.272-.1-.471-.15-.67.15-.198.3-.77.97-.943 1.17-.173.2-.347.225-.645.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.3-.018-.462.13-.61.135-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.67-1.61-.92-2.2-.24-.585-.48-.5-.67-.51-.172-.01-.37-.01-.568-.01-.199 0-.52.075-.793.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.766-.72 2.015-1.417.25-.697.25-1.294.175-1.417-.075-.125-.272-.2-.57-.35z"/></svg>
+                            <span>Salin ke WhatsApp</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <a
+                            href={studentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 py-1.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"
+                            title="Buka dan cuba kuiz di tab baru"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Buka Kuiz</span>
+                          </a>
+
+                          <button
+                            onClick={(e) => handleDeleteUmumAssignment(t.kod, e)}
+                            disabled={deletingUmumKod === t.kod}
+                            className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl border border-slate-200 hover:border-red-200 transition disabled:opacity-40"
+                            title="Padam kod tugasan ini dari sistem & Google Sheets"
+                          >
+                            {deletingUmumKod === t.kod ? (
+                              <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
+          </div>
+
+          {/* BAHAGIAN 2: REKOD MARKAH & KEPUTUSAN PELAJAR */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                  📋
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md border border-blue-200">
+                      Bahagian 2
+                    </span>
+                    <h3 className="font-extrabold text-base sm:text-lg text-slate-800">
+                      Rekod & Keputusan Markah Pelajar
+                    </h3>
+                    <span className="text-xs font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                      {filteredUmumSubmissions.length} Rekod Murid
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    Markah disegerakkan secara langsung (real-time) ke sistem dan Google Sheets guru.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* STATS OVERVIEW */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
+                  👥
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Murid Menjawab</div>
+                  <div className="text-2xl font-black text-slate-800">{filteredUmumSubmissions.length}</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
+                  📊
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Purata Markah</div>
+                  <div className="text-2xl font-black text-emerald-600">
+                    {filteredUmumSubmissions.length > 0 
+                      ? Math.round(filteredUmumSubmissions.reduce((acc, s) => acc + (s.markah || 0), 0) / filteredUmumSubmissions.length) 
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">
+                  📁
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tugasan Dicipta</div>
+                  <div className="text-2xl font-black text-slate-800">{tugasanUmumList.length}</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
+                  🎯
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Lulus (&ge;40%)</div>
+                  <div className="text-2xl font-black text-amber-600">
+                    {filteredUmumSubmissions.filter(s => (s.markah || 0) >= 40).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CONTROLS & FILTER BAR */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                {/* Filter Kod */}
+                <select
+                  value={filterUmumKod}
+                  onChange={(e) => setFilterUmumKod(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="all">Semua Kod Tugasan ({tugasanUmumList.length})</option>
+                  {tugasanUmumList.map(t => (
+                    <option key={t.kod} value={t.kod}>
+                      {t.kod} - {t.kelas} ({t.subjek} • {t.bab})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Filter Kelas */}
+                <select
+                  value={filterUmumKelas}
+                  onChange={(e) => setFilterUmumKelas(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="all">Semua Kelas</option>
+                  {uniqueUmumClasses.map(k => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+
+                {/* Search */}
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    value={searchUmumStudent}
+                    onChange={(e) => setSearchUmumStudent(e.target.value)}
+                    placeholder="Cari nama pelajar / kelas..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <a
+                  href={`https://docs.google.com/spreadsheets/d/${spreadsheetId || '1juPUlz-mCIHeHzp2oy5Uyw8e-cx8b0cHn2uq-oLRS0A'}/edit`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-xs"
+                  title="Buka tab TUGASAN UMUM dalam Google Sheets"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Buka Tab Spreadsheet (TUGASAN UMUM)</span>
+                  <ExternalLink className="w-3 h-3 text-slate-400" />
+                </a>
+
+                <button
+                  onClick={loadTugasanUmumData}
+                  disabled={loadingUmum}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+                  title="Segerak semula rekod dari pelayan & tab TUGASAN UMUM Google Sheets"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUmum ? 'animate-spin' : ''}`} />
+                  <span>Segerak Sheets</span>
+                </button>
+
+                <button
+                  onClick={handleCopyUmumMarksText}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{copiedUmumMarks ? '✓ Disalin' : 'Salin Markah'}</span>
+                </button>
+
+                <button
+                  onClick={handleExportUmumCSV}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Eksport CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SUBMISSIONS TABLE */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                <div className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                  <span>📋</span> Senarai Markah Tugasan Umum ({filteredUmumSubmissions.length})
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Tab "TUGASAN UMUM"
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium">
+                  Nama direkod dalam <strong>HURUF BESAR</strong> tanpa memerlukan login Chrome
+                </div>
+              </div>
+
+              {loadingUmum ? (
+                <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-2">
+                  <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Memuat turun data markah...</span>
+                </div>
+              ) : filteredUmumSubmissions.length === 0 ? (
+                <div className="p-12 text-center text-slate-500">
+                  <div className="text-3xl mb-2">📭</div>
+                  <div className="font-bold text-slate-700 text-base">Tiada Rekod Pelajar Dijumpai</div>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
+                    Belum ada murid yang menghantar jawapan untuk penapis ini. Kongsikan pautan di Bahagian 1 kepada murid untuk mula merekod markah.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                        <th className="py-3 px-4 w-12 text-center">#</th>
+                        <th className="py-3 px-4">Nama Penuh Pelajar (Huruf Besar)</th>
+                        <th className="py-3 px-4">Kelas</th>
+                        <th className="py-3 px-4">Kod Tugasan</th>
+                        <th className="py-3 px-4">Tajuk / Topik Soalan</th>
+                        <th className="py-3 px-4 text-center">Markah (%)</th>
+                        <th className="py-3 px-4 text-center">Status</th>
+                        <th className="py-3 px-4 text-right">Tarikh & Masa</th>
+                        <th className="py-3 px-3 text-center w-12">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredUmumSubmissions.map((sub, idx) => {
+                        const assn = tugasanUmumList.find(a => a.kod === sub.kod);
+                        const parsedMark = sub.markah !== null && sub.markah !== undefined ? parseFloat(String(sub.markah).replace('%', '')) : null;
+                        const mark = (parsedMark !== null && !isNaN(parsedMark)) ? parsedMark : null;
+                        
+                        let markColor = "bg-slate-100 text-slate-700 border-slate-200";
+                        let markLabel = "-";
+                        if (mark !== null) {
+                          if (mark >= 80) markColor = "bg-emerald-100 text-emerald-800 border-emerald-300 font-black";
+                          else if (mark >= 60) markColor = "bg-blue-100 text-blue-800 border-blue-300 font-bold";
+                          else if (mark >= 40) markColor = "bg-amber-100 text-amber-800 border-amber-300 font-bold";
+                          else markColor = "bg-red-100 text-red-800 border-red-300 font-bold";
+                          markLabel = `${mark}%`;
+                        }
+
+                        const subKey = `${(sub.kod || '').trim().toUpperCase()}_${(sub.nama || '').trim().toUpperCase()}`;
+
+                        return (
+                          <tr key={sub.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3.5 px-4 text-center text-slate-400 font-mono font-medium">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3.5 px-4 font-black text-slate-900 uppercase tracking-wide">
+                              <span>{sub.nama}</span>
+                              {(sub.isSites || sub.source === 'Google Sites' || (sub.kod && sub.kod.startsWith('GS-')) || sub.kod && sub.kod.startsWith('TU-')) && (
+                                <span className="ml-2 inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300">
+                                  🌐 Mod Umum
+                                </span>
+                              )}
+                              {sub.fromSheet && (
+                                <span className="ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  Tab Sheets
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded-lg border border-slate-200 text-[11px]">
+                                {sub.kelas || '-'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold text-[11px]">
+                                {sub.kod || '-'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate" title={assn?.bab || sub.qid}>
+                              {assn ? `${assn.subjek} - ${assn.bab}` : (sub.qid || '-')}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={`inline-block px-3 py-1 rounded-full text-xs border ${markColor}`}>
+                                {markLabel}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              {(() => {
+                                const sStatus = (sub.status || '').toLowerCase();
+                                const isSedang = sStatus.includes('sedang');
+                                const isSelesai = sStatus.includes('selesai') || sStatus.includes('telah') || sub.markah !== null;
+                                
+                                if (isSedang) {
+                                  return (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-900 border border-blue-300 shadow-2xs">
+                                      <span className="relative flex h-2 w-2 mr-1.5 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                                      </span>
+                                      Sedang Menjawab
+                                    </span>
+                                  );
+                                } else if (isSelesai) {
+                                  return (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                      <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-emerald-600"></span>
+                                      Selesai Menjawab
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                      <span className="w-2 h-2 rounded-full mr-1.5 shrink-0 bg-amber-500"></span>
+                                      Belum Menjawab
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </td>
+                            <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[11px]">
+                              {sub.updatedAt || '-'}
+                            </td>
+                            <td className="py-3.5 px-3 text-center">
+                              <button
+                                onClick={(e) => handleDeleteSingleUmumScore(sub, e)}
+                                disabled={deletingScoreKey === subKey}
+                                className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg border border-transparent hover:border-red-200 transition disabled:opacity-40 cursor-pointer"
+                                title="Padam rekod markah murid ini dari sistem & Google Sheets"
+                              >
+                                {deletingScoreKey === subKey ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : (

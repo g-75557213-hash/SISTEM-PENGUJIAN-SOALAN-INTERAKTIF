@@ -149,16 +149,21 @@ Pelan komprehensif bagi memulihkan dan menambah baik aliran pengesahan akaun mur
 
 ---
 
-## Langkah Pelaksanaan (Execution Steps)
+## Langkah Pelaksanaan & Status Terkini (Selesai Sepenuhnya)
 
-1. **Komponen Pengesahan Murid (`src/components/ClassroomStudentVerification.tsx`)**:
-   * Membina paparan kad profil murid lengkap dengan avatar, nama kelas, teks *"Adakah ini nama anda?"*, butang **Pasti** dan butang **Taip Manual**.
-   * Integrasi algoritma padanan nama pintar (*fuzzy matching*) berasaskan senarai murid Google Classroom.
-2. **Penyelarasan Aliran Pautan dalam `src/components/StudentView.tsx` & `src/App.tsx`**:
-   * Mengesan pautan Google Classroom dan mengaktifkan mod semakan roster.
-   * Menyimpan status verifikasi (`pending_teacher_approval` vs `verified`).
-3. **Modul Pengesahan Guru dalam `src/components/SemakanGuru.tsx`**:
-   * Menyediakan modal tindakan guru untuk senarai murid bertanda *Perlu Pengesahan*.
-   * Pilihan memilih murid sasaran daripada senarai calon sepadan atau membuang terus rekod tidak sah.
-4. **Penyegerakan Markah (*Grade Sync*)**:
-   * Selepas guru mengesahkan murid, sistem membenarkan sync markah terus ke Google Classroom tanpa ralat e-mel/nama tidak dijumpai.
+1. **Pengesanan Akaun Google Sepantas Kilat & Tanpa Login Popup (`src/components/StudentView.tsx`)**:
+   - [x] Memuatkan senarai akaun serta merta (0ms) secara serentak daripada storan setempat (`localStorage`) dan cache roster kelas (`cached_roster_[courseId]`).
+   - [x] Keutamaan akaun MOE DELIMa (`@moe-dl.edu.my`) dengan paparan lencana bintang dan latar hijau lembut.
+   - [x] Tiada paksaan login popup Google — murid hanya perlu menekan akaun mereka, mengesahkan profil dan terus memulakan soalan.
+   - [x] Pengurangan lebar & ketinggian senarai nama (`max-h-44`, padding padat, reka bentuk kemas) bagi mengurangkan vertical scrolling.
+   - [x] Jika tiada akaun dikesan, paparan tidak tersekat dengan loader lama; ruangan nama manual disediakan serta merta.
+
+2. **UI Tugasan Umum Semakan Guru (`src/components/SemakanGuru.tsx`)**:
+   - [x] Meletakkan "Senarai Tugasan Umum Telah Dijana" (Bahagian 1) di bahagian paling atas tab Semakan Guru.
+   - [x] Menambah butang hijau "Salin ke WhatsApp" (`bg-[#25D366]`) berformat kemas (Tajuk, Topik, Kod, Pautan Terus, Makluman tanpa perlu login).
+   - [x] Memisahkan dengan jelas antara Bahagian 1 (Senarai Tugasan) dan Bahagian 2 (Rekod & Keputusan Markah Pelajar).
+
+3. **Kad Soalan Bank Soalan (`src/components/BankSoalan.tsx`)**:
+   - [x] Menukar nama butang kepada "Tugasan Umum".
+   - [x] Menyusun butang "Pratonton Soalan" dan "Link Soalan" bersebelahan pada baris yang sama (`grid grid-cols-2 gap-2`).
+   - [x] Mengekalkan pembahagian teratur mengikut Bab (Bab terendah ke tertinggi) dan SP (terendah ke tertinggi) dengan pengepala gradient ungu lembut.

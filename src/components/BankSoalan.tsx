@@ -809,27 +809,30 @@ export default function BankSoalan({
                               className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
                             >
                               <Globe className="w-3.5 h-3.5 mr-1.5" />
-                              Link Tugasan Umum (Tanpa GC)
+                              Tugasan Umum
                             </button>
-                            <button 
-                              onClick={() => setPreviewQuestion(q)}
-                              className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm"
-                            >
-                              <Eye className="w-4 h-4 mr-1.5 text-slate-500" />
-                              Pratonton Soalan
-                            </button>
-                            <button 
-                              onClick={() => {
-                                const directLink = buildDirectLink(q.idSoalan);
-                                navigator.clipboard.writeText(directLink);
-                                alert("Pautan terus (Direct Link) soalan berjaya disalin!\n" + directLink);
-                              }}
-                              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-300 gap-1.5 shadow-2xs cursor-pointer"
-                              title="Salin Direct Link Soalan untuk murid"
-                            >
-                              <Link className="w-3.5 h-3.5 text-blue-600" />
-                              Salin Direct Link Soalan
-                            </button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button 
+                                onClick={() => setPreviewQuestion(q)}
+                                className="bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm cursor-pointer"
+                                title="Pratonton Soalan"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1 text-slate-500 shrink-0" />
+                                <span className="truncate">Pratonton Soalan</span>
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const directLink = buildDirectLink(q.idSoalan);
+                                  navigator.clipboard.writeText(directLink);
+                                  alert("Pautan terus soalan berjaya disalin!\n" + directLink);
+                                }}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-300 gap-1 shadow-2xs cursor-pointer"
+                                title="Salin Link Soalan untuk murid"
+                              >
+                                <Link className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="truncate">Link Soalan</span>
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <div className="relative z-0 space-y-2">
@@ -868,7 +871,7 @@ export default function BankSoalan({
                               className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center transition shadow-sm cursor-pointer"
                             >
                               <Globe className="w-3.5 h-3.5 mr-1.5" />
-                              Link Tugasan Umum (Tanpa GC)
+                              Tugasan Umum
                             </button>
                             <button 
                               onClick={() => openSendModal(q)}
@@ -878,13 +881,28 @@ export default function BankSoalan({
                               Hantar ke Kelas Tambahan
                             </button>
 
-                            <button 
-                              onClick={() => setPreviewQuestion(q)}
-                              className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm"
-                            >
-                              <Eye className="w-4 h-4 mr-1.5 text-slate-500" />
-                              Pratonton Soalan
-                            </button>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button 
+                                onClick={() => setPreviewQuestion(q)}
+                                className="bg-slate-50 hover:bg-slate-100 text-slate-700 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-200 shadow-sm cursor-pointer"
+                                title="Pratonton Soalan"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1 text-slate-500 shrink-0" />
+                                <span className="truncate">Pratonton Soalan</span>
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const directLink = buildDirectLink(q.idSoalan);
+                                  navigator.clipboard.writeText(directLink);
+                                  alert("Pautan terus soalan berjaya disalin!\n" + directLink);
+                                }}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center transition border border-slate-300 gap-1 shadow-2xs cursor-pointer"
+                                title="Salin Link Soalan untuk murid"
+                              >
+                                <Link className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span className="truncate">Link Soalan</span>
+                              </button>
+                            </div>
                             
                             <div className="flex gap-2">
                               <button 
@@ -926,18 +944,6 @@ export default function BankSoalan({
                                 RESET SEMUA
                               </button>
                             </div>
-                            
-                            <button 
-                              onClick={() => {
-                                const directLink = buildDirectLink(q.idSoalan);
-                                navigator.clipboard.writeText(directLink);
-                                alert("Pautan terus (Direct Link) soalan berjaya disalin!\n" + directLink);
-                              }}
-                              className="w-full bg-white hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center transition border border-slate-200 shadow-sm gap-1.5"
-                            >
-                              <Link className="w-3.5 h-3.5 text-blue-500" />
-                              Salin Direct Link Soalan
-                            </button>
                           </div>
                         )}
                       </div>
@@ -1363,6 +1369,7 @@ export default function BankSoalan({
                               Dicipta: {item.createdAt || 'Baru ini'}
                             </div>
                           </div>
+
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               type="button"
@@ -1371,9 +1378,27 @@ export default function BankSoalan({
                                 alert(`Pautan bagi kelas ${item.kelas} berjaya disalin!`);
                               }}
                               className="bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 px-2.5 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-1 transition"
+                              title="Salin pautan tugasan"
                             >
                               <Copy className="w-3 h-3" />
                               <span>Salin</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const subjekStr = publicModalQ?.subjek || '';
+                                const tingkatanStr = publicModalQ?.tingkatan || '';
+                                const babStr = publicModalQ?.bab || 'Kuiz Interaktif';
+                                const titleStr = `*TUGASAN KUIZ INTERAKTIF: ${subjekStr.toUpperCase()} (${tingkatanStr.toUpperCase()})*`;
+                                const waText = `${titleStr}\n\nAssalammualaikum & Salam Sejahtera,\nMurid kelas *${(item.kelas || '').toUpperCase()}* diminta menjawab tugasan kuiz berikut:\n\n📖 *Topik:* ${babStr}\n🔑 *Kod Tugasan:* ${item.kod}\n\n👉 *Pautan Tugasan:*\n${itemUrl}\n\n✨ *PERHATIAN MURID:*\n✅ TIDAK PERLU LOG MASUK CHROME ATAU AKAUN GOOGLE.\n✅ Hanya masukkan NAMA PENUH dan KELAS sahaja untuk menjawab.\n\nMarkah anda akan direkodkan terus kepada guru.\nSelamat menjawab! Terima kasih.`;
+                                navigator.clipboard.writeText(waText);
+                                alert(`Mesej WhatsApp untuk kelas ${item.kelas} berjaya disalin!`);
+                              }}
+                              className="bg-[#25D366] hover:bg-[#20ba5a] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition shadow-xs"
+                              title="Salin mesej WhatsApp"
+                            >
+                              <span>💬</span>
+                              <span>WA</span>
                             </button>
                             <button
                               type="button"
