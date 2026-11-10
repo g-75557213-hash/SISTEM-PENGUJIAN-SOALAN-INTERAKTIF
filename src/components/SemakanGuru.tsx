@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { GCClass, getAssignments, getStudentSubmissions, getStudents, getTeachers, patchStudentSubmissionGrade, returnStudentSubmission, deleteAssignment } from '../lib/classroom';
 import { CheckCircle, RotateCcw, Globe, Users, Search, Download, Copy, RefreshCw, Trash2, ExternalLink, Award, FileSpreadsheet, Check } from 'lucide-react';
 import { SoalanData, getTugasanUmumRowsFromSheet, ensureTugasanUmumSheet, getMarkahMurid, deleteTugasanUmumRowFromSheet, deleteClassroomAssignmentAndMarksFromSheets, buildDirectLink } from '../lib/sheets';
@@ -2650,8 +2651,8 @@ export default function SemakanGuru({
       )}
 
       {/* RESOLVER MODAL FOR STUDENT MATCHING & APPROVAL */}
-      {activeResolvingSubmission && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+      {activeResolvingSubmission && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
               <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
@@ -2811,7 +2812,8 @@ export default function SemakanGuru({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

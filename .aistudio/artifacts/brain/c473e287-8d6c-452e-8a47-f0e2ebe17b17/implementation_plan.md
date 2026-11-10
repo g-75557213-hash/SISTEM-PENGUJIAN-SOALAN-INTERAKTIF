@@ -151,19 +151,23 @@ Pelan komprehensif bagi memulihkan dan menambah baik aliran pengesahan akaun mur
 
 ## Langkah Pelaksanaan & Status Terkini (Selesai Sepenuhnya)
 
-1. **Pengesanan Akaun Google Sepantas Kilat & Tanpa Login Popup (`src/components/StudentView.tsx`)**:
-   - [x] Memuatkan senarai akaun serta merta (0ms) secara serentak daripada storan setempat (`localStorage`) dan cache roster kelas (`cached_roster_[courseId]`).
-   - [x] Keutamaan akaun MOE DELIMa (`@moe-dl.edu.my`) dengan paparan lencana bintang dan latar hijau lembut.
-   - [x] Tiada paksaan login popup Google — murid hanya perlu menekan akaun mereka, mengesahkan profil dan terus memulakan soalan.
-   - [x] Pengurangan lebar & ketinggian senarai nama (`max-h-44`, padding padat, reka bentuk kemas) bagi mengurangkan vertical scrolling.
-   - [x] Jika tiada akaun dikesan, paparan tidak tersekat dengan loader lama; ruangan nama manual disediakan serta merta.
+1. **Pembaikan Masalah Header di Atas Popup Modal**:
+   - [x] Punca utama dikenal pasti: `<div className="flex flex-col h-full bg-slate-50 relative z-0 pb-10">` dalam `BankSoalan.tsx` telah memerangkap modal popup ke dalam stacking context bernilai `z-0`, menyebabkannya berada di bawah header utama (`z-20`) dan panel navigasi dwi-mod (`z-30`).
+   - [x] Dibuang `relative z-0` daripada pembungkus utama `BankSoalan.tsx`.
+   - [x] Menggunakan React Portal `createPortal(..., document.body)` berserta `z-[9999]` bagi semua popup modal (Modal Tugasan Umum, Modal Hantar ke Google Classroom, Modal Pratonton Soalan, dan Modal Pautan WhatsApp) serta modal pengesahan padanan guru di `SemakanGuru.tsx`. Ini menjamin 100% bahawa tetingkap modal sentiasa berada di lapisan paling hadapan dan tidak lagi tertindih di bawah sebarang header.
 
-2. **UI Tugasan Umum Semakan Guru (`src/components/SemakanGuru.tsx`)**:
-   - [x] Meletakkan "Senarai Tugasan Umum Telah Dijana" (Bahagian 1) di bahagian paling atas tab Semakan Guru.
-   - [x] Menambah butang hijau "Salin ke WhatsApp" (`bg-[#25D366]`) berformat kemas (Tajuk, Topik, Kod, Pautan Terus, Makluman tanpa perlu login).
-   - [x] Memisahkan dengan jelas antara Bahagian 1 (Senarai Tugasan) dan Bahagian 2 (Rekod & Keputusan Markah Pelajar).
+2. **Pengesanan Akaun Google Bukan MOE (Akaun Personal / @gmail)**:
+   - [x] Sistem kini mengimbas storan setempat (`localStorage`) bagi semua rekod pengesahan Google Chrome (termasuk `firebase:authUser:*`, `known_personal_accounts`, dan `known_student_accounts`) serta mengimbas pangkalan data Chrome IndexedDB (`firebaseLocalStorageDb`).
+   - [x] Akaun bukan MOE (seperti akaun peribadi murid atau akaun ibu bapa `@gmail.com`) dikesan secara automatik dan disenaraikan untuk pilihan murid.
+   - [x] Keutamaan paparan kekal teratur: Akaun MOE DELIMa (`⭐ MOE (Disyorkan)`) diutamakan di baris teratas dengan warna hijau lembut, manakala akaun Google peribadi (`👤 Google Personal`) dipaparkan kemas dengan lencana biru lembut.
+   - [x] Murid boleh terus memilih mana-mana akaun (MOE atau Personal) tanpa perlu log masuk popup Google semula untuk memulakan soalan interaktif.
+   - [x] Markah murid direkodkan terus mengikut identiti akaun yang dipilih secara live ke dalam pangkalan data dan Google Sheets.
 
-3. **Kad Soalan Bank Soalan (`src/components/BankSoalan.tsx`)**:
-   - [x] Menukar nama butang kepada "Tugasan Umum".
-   - [x] Menyusun butang "Pratonton Soalan" dan "Link Soalan" bersebelahan pada baris yang sama (`grid grid-cols-2 gap-2`).
-   - [x] Mengekalkan pembahagian teratur mengikut Bab (Bab terendah ke tertinggi) dan SP (terendah ke tertinggi) dengan pengepala gradient ungu lembut.
+3. **UI Tugasan Umum Semakan Guru**:
+   - [x] "Senarai Tugasan Umum Telah Dijana" (Bahagian 1) diletakkan di bahagian atas dengan butang WhatsApp hijau (`bg-[#25D366]`) berformat kemas.
+   - [x] Bahagian dipisahkan dengan jelas antara Bahagian 1 (Pengurusan Tugasan) dan Bahagian 2 (Rekod & Keputusan Markah Pelajar).
+
+4. **Kad Soalan Bank Soalan**:
+   - [x] Dinamakan semula kepada "Tugasan Umum".
+   - [x] Butang "Pratonton Soalan" dan "Link Soalan" disusun bersebelahan dalam baris yang sama (`grid grid-cols-2 gap-2`).
+   - [x] Pengepala gradient ungu lembut mengikut Bab terendah ke tertinggi dikekalkan.

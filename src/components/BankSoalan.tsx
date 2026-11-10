@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Eye, Send, CheckCircle, Search, Link, RotateCcw, X, Filter, Globe, Copy, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
 import { GCClass } from '../lib/classroom';
 import { SoalanData, saveTugasanToSheets, readTugasanLink, updateTugasanStatus, deleteTugasanAndScoresFromSheets, ensureTugasanUmumSheet, saveTugasanUmumRowToSheet, getTugasanUmumRowsFromSheet, deleteTugasanUmumRowFromSheet, buildDirectLink, convertAllSheet1LinksToDirect } from '../lib/sheets';
@@ -642,7 +643,7 @@ export default function BankSoalan({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative z-0 pb-10">
+    <div className="flex flex-col h-full bg-slate-50 pb-10">
       <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col relative">
 
         <WaygroundSection token={token} classes={classes} spreadsheetId={spreadsheetId} />
@@ -962,8 +963,8 @@ export default function BankSoalan({
       </div>
 
       {/* Send Modal */}
-      {showSendModal && sendQ && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      {showSendModal && sendQ && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="bg-blue-600 px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="text-white font-bold text-lg flex items-center">
@@ -1066,12 +1067,13 @@ export default function BankSoalan({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Preview Modal */}
-      {previewQuestion && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 z-[100]">
+      {previewQuestion && createPortal(
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 z-[9999]">
           <div className="bg-white rounded-none w-full max-w-none h-screen overflow-hidden shadow-2xl flex flex-col">
             <div className="bg-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="text-white font-bold text-lg flex items-center">
@@ -1114,11 +1116,12 @@ export default function BankSoalan({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* WA Modal */}
-      {waPopupQ && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+      {waPopupQ && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="bg-[#25D366] px-6 py-4 flex items-center justify-between shrink-0">
               <h3 className="text-white font-bold text-lg flex items-center">
@@ -1161,12 +1164,13 @@ export default function BankSoalan({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL TUGASAN UMUM (TANPA GOOGLE CLASSROOM) */}
-      {showPublicModal && publicModalQ && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+      {showPublicModal && publicModalQ && createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[9999] overflow-y-auto">
           <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col my-8 border border-slate-200">
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 p-5 text-white flex justify-between items-start">
@@ -1478,7 +1482,8 @@ export default function BankSoalan({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
