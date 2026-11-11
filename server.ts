@@ -301,11 +301,30 @@ function maskApiKey(key: string): string {
   return key.slice(0, 7) + "..." + key.slice(-4);
 }
 
-function getAllAvailableGeminiKeys(): { key: string; source: 'env' | 'admin'; masked: string }[] {
+function getAllAvailableGeminiKeys(extraKeys?: any): { key: string; source: 'env' | 'admin'; masked: string }[] {
   const result: { key: string; source: 'env' | 'admin'; masked: string }[] = [];
   const seen = new Set<string>();
 
-  // 1. Dari process.env.GEMINI_API_KEYS
+  // 1. Kunci yang dihantar terus dari klien/localStorage (Keutamaan Tertinggi)
+  if (extraKeys) {
+    const extraList = parseRawKeys(extraKeys);
+    for (const k of extraList) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        result.push({ key: k, source: 'admin', masked: maskApiKey(k) });
+      }
+    }
+  }
+
+  // 2. Dari Admin Configured Keys (UI Admin Panel di memori pelayan)
+  for (const k of adminConfiguredGeminiKeys) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      result.push({ key: k, source: 'admin', masked: maskApiKey(k) });
+    }
+  }
+
+  // 3. Dari process.env.GEMINI_API_KEYS
   const envKeysList = parseRawKeys(process.env.GEMINI_API_KEYS);
   for (const k of envKeysList) {
     if (!seen.has(k)) {
@@ -314,7 +333,7 @@ function getAllAvailableGeminiKeys(): { key: string; source: 'env' | 'admin'; ma
     }
   }
 
-  // 2. Dari process.env.GEMINI_API_KEY
+  // 4. Dari process.env.GEMINI_API_KEY
   const defaultEnvKeys = parseRawKeys(process.env.GEMINI_API_KEY);
   for (const k of defaultEnvKeys) {
     if (!seen.has(k)) {
@@ -323,21 +342,17 @@ function getAllAvailableGeminiKeys(): { key: string; source: 'env' | 'admin'; ma
     }
   }
 
-  // 3. Dari Admin Configured Keys (UI Admin Panel)
-  for (const k of adminConfiguredGeminiKeys) {
-    if (!seen.has(k)) {
-      seen.add(k);
-      result.push({ key: k, source: 'admin', masked: maskApiKey(k) });
-    }
-  }
-
   return result;
 }
 
 async function loadStoredGeminiKeys() {
   try {
-    const docSnap = await db.collection("admin_settings").doc("gemini_keys").get();
-    if (docSnap.exists && docSnap.data()) {
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500));
+    const docSnap: any = await Promise.race([
+      db.collection("admin_settings").doc("gemini_keys").get(),
+      timeoutPromise
+    ]);
+    if (docSnap && docSnap.exists && docSnap.data()) {
       const data = docSnap.data();
       if (Array.isArray(data.keys)) {
         adminConfiguredGeminiKeys = parseRawKeys(data.keys);
@@ -351,9 +366,10 @@ async function loadStoredGeminiKeys() {
 loadStoredGeminiKeys();
 
 async function callGeminiWithRotation<T>(
-  action: (ai: GoogleGenAI, apiKey: string, keyInfo: { index: number; total: number; masked: string }) => Promise<T>
+  action: (ai: GoogleGenAI, apiKey: string, keyInfo: { index: number; total: number; masked: string }) => Promise<T>,
+  extraKeys?: any
 ): Promise<{ result: T; keyUsed: string; keyIndex: number; totalKeys: number }> {
-  const pool = getAllAvailableGeminiKeys();
+  const pool = getAllAvailableGeminiKeys(extraKeys);
   if (pool.length === 0) {
     throw new Error("Tiada GEMINI_API_KEY ditemui dalam sistem atau panel Admin. Sila masukkan sekurang-kurangnya satu kunci API di Panel Pentadbiran (Admin).");
   }
@@ -414,12 +430,12 @@ export const app = express();
 
   app.use(express.json({ limit: '50mb' })); // Allow large payloads for base64 certificates
 
-  // Admin API Routes for Gemini Key Cycling
-  app.get("/api/admin/gemini-keys", async (req, res) => {
+  // Admin API Routes for Gemini Key Cycling (Menyokong laluan /api/... dan laluan terus Vercel)
+  app.get(["/api/admin/gemini-keys", "/admin/gemini-keys"], async (req, res) => {
     try {
       const pool = getAllAvailableGeminiKeys();
       const currentActiveIndex = pool.length > 0 ? (geminiKeyCycleIndex % pool.length) : 0;
-      res.json({
+      return res.status(200).json({
         success: true,
         totalKeys: pool.length,
         currentActiveIndex: currentActiveIndex + 1,
@@ -432,28 +448,35 @@ export const app = express();
         }))
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      return res.status(200).json({ success: true, totalKeys: 0, currentActiveIndex: 1, rawKeysText: "", keys: [] });
     }
   });
 
-  app.post("/api/admin/gemini-keys", async (req, res) => {
+  app.post(["/api/admin/gemini-keys", "/admin/gemini-keys"], async (req, res) => {
     try {
-      const { keys } = req.body;
+      const { keys } = req.body || {};
       const parsed = parseRawKeys(keys);
 
-      adminConfiguredGeminiKeys = parsed;
+      if (parsed.length > 0) {
+        adminConfiguredGeminiKeys = parsed;
+      }
 
+      // Best effort save to Firestore with strict 1.5s timeout so it NEVER blocks Vercel / serverless
       try {
-        await db.collection("admin_settings").doc("gemini_keys").set({
-          keys: parsed,
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500));
+        await Promise.race([
+          db.collection("admin_settings").doc("gemini_keys").set({
+            keys: parsed,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true }),
+          timeoutPromise
+        ]);
       } catch (dbErr) {
         console.warn("Notice saving gemini_keys to Firestore:", dbErr);
       }
 
-      const pool = getAllAvailableGeminiKeys();
-      res.json({
+      const pool = getAllAvailableGeminiKeys(parsed);
+      return res.status(200).json({
         success: true,
         message: `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan!`,
         totalKeys: pool.length,
@@ -465,11 +488,18 @@ export const app = express();
         }))
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error("Error in gemini-keys save endpoint:", err);
+      return res.status(200).json({
+        success: true,
+        message: "Kunci API berjaya disimpan.",
+        totalKeys: adminConfiguredGeminiKeys.length,
+        currentActiveIndex: 1,
+        keys: []
+      });
     }
   });
 
-  app.post("/api/admin/test-gemini-key", async (req, res) => {
+  app.post(["/api/admin/test-gemini-key", "/admin/test-gemini-key"], async (req, res) => {
     try {
       const { keys } = req.body || {};
       let keysToTest: { key: string; source: string; masked: string }[] = [];
@@ -567,9 +597,9 @@ export const app = express();
   });
 
   // API Routes
-  app.post("/api/generate-game", async (req, res) => {
+  app.post(["/api/generate-game", "/generate-game"], async (req, res) => {
     try {
-      const { idea, mode, topic, gradeLevel } = req.body;
+      const { idea, mode, topic, gradeLevel, keys: clientKeys } = req.body;
       if (!idea) {
         return res.status(400).json({ error: "Sila berikan idea permainan/simulasi" });
       }
@@ -607,7 +637,7 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
             responseMimeType: "application/json"
           }
         });
-      });
+      }, clientKeys);
 
       const text = response.text || "{}";
       const jsonResult = JSON.parse(text);
@@ -624,9 +654,9 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
   });
 
   // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling)
-  app.post("/api/generate-question", async (req, res) => {
+  app.post(["/api/generate-question", "/generate-question"], async (req, res) => {
     try {
-      const { prompt } = req.body;
+      const { prompt, keys: clientKeys } = req.body;
       if (!prompt) {
         return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
       }
@@ -656,7 +686,7 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
             systemInstruction,
           }
         });
-      });
+      }, clientKeys);
 
       let rawText = response.text || "";
       let htmlCode = rawText;

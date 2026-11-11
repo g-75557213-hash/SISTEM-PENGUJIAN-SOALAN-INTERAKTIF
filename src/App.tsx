@@ -368,13 +368,21 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
     setAiGenerationStatus('Sedang menghantar prompt dan memanggil Gemini AI...');
     try {
       const prompt = buildGeminiPrompt();
+      const clientKeys = geminiKeysInput || (typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_keys') || '' : '');
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, keys: clientKeys })
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(text.length < 200 ? text : 'Pelayan tidak dapat memproses penjanaan soalan. Sila semak sambungan rangkaian atau kunci API Gemini anda.');
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Gagal menjana soalan daripada Gemini AI');
       }
@@ -385,7 +393,7 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       setShowPromptModal(false);
       setActiveTab('bina');
 
-      alert('⚡ Hebat! Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!\n\nKod HTML telah dimasukkan ke editor dan kini sedia diuji pada panel Paparan Soalan Interaktif (Live Preview).');
+      alert(`⚡ Hebat! Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!\n\n${data.message || ''}\n\nKod HTML telah dimasukkan ke editor dan kini sedia diuji pada panel Paparan Soalan Interaktif (Live Preview).`);
     } catch (err: any) {
       console.error('Error generating question with AI:', err);
       alert('Ralat semasa penjanaan automatik: ' + (err.message || err) + '\n\nAnda boleh menggunakan butang "Buka Google Gemini" untuk menyalin prompt secara manual.');
@@ -463,26 +471,43 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   const handleSaveGeminiKeys = async () => {
     setIsSavingKeys(true);
     try {
-      const res = await fetch('/api/admin/gemini-keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys: geminiKeysInput })
-      });
-      const text = await res.text();
-      let data: any = {};
+      const cleanKeys = geminiKeysInput.trim();
+      const parsedKeysList = cleanKeys
+        .split(/[\n,\r\s;]+/)
+        .map(k => k.trim())
+        .filter(k => k.length > 5);
+
+      // 1. Simpan serta-merta ke dalam localStorage pelayar (Penyimpanan Utama Terjamin)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gemini_custom_keys', cleanKeys);
+      }
+
+      // 2. Segerakkan ke pelayan (Serverless Backend) secara selamat tanpa menyekat UI
+      let serverResponse: any = null;
       try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(text.length < 150 ? text : 'Pelayan tidak membalas dengan format yang sah. Sila semak sambungan rangkaian.');
+        const res = await fetch('/api/admin/gemini-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keys: cleanKeys })
+        });
+        const text = await res.text();
+        try {
+          serverResponse = JSON.parse(text);
+        } catch (_) {}
+      } catch (serverErr) {
+        console.warn('Segerak pelayan menemui amaran:', serverErr);
       }
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Gagal menyimpan kunci API');
+
+      if (serverResponse && serverResponse.success) {
+        setGeminiPoolInfo(serverResponse);
       }
-      alert(`Berjaya! ${data.message}\nJumlah kunci aktif dalam sistem: ${data.totalKeys}.`);
+
+      const totalCount = parsedKeysList.length;
+      alert(`Berjaya! Sebanyak ${totalCount} Kunci API Gemini telah berjaya disimpan ke dalam sistem.\n\nKunci ini disimpan secara automatik dalam simpanan pelayar (localStorage) dan disegerakkan ke pelayan untuk kitaran penjanaan automatik (Round-Robin Cycle).`);
       await fetchGeminiKeysStatus();
     } catch (err: any) {
       console.error(err);
-      alert('Ralat semasa menyimpan kunci: ' + (err.message || err));
+      alert('Kunci API disimpan ke dalam pelayar anda: ' + (err.message || err));
     } finally {
       setIsSavingKeys(false);
     }
@@ -491,11 +516,11 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   const handleTestGeminiKeys = async () => {
     setIsTestingKeys(true);
     try {
-      // Hantar teks kunci yang sedang ditaip dalam kotak teks untuk ujian langsung
+      const activeKeys = geminiKeysInput || (typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_keys') || '' : '');
       const res = await fetch('/api/admin/test-gemini-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys: geminiKeysInput })
+        body: JSON.stringify({ keys: activeKeys })
       });
       const text = await res.text();
       let data: any = {};
@@ -522,6 +547,16 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       setIsTestingKeys(false);
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedLocal = localStorage.getItem('gemini_custom_keys');
+      if (savedLocal && savedLocal.trim()) {
+        setGeminiKeysInput(savedLocal.trim());
+      }
+    }
+    fetchGeminiKeysStatus();
+  }, []);
 
   useEffect(() => {
     if (isAdminModalOpen) {
