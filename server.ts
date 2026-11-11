@@ -278,26 +278,96 @@ async function saveStudentAlias(courseId: string | undefined, typedName: string,
   }
 }
 
-export const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// ==========================================
+// GEMINI API KEY POOL & CYCLE (ROTATION) ENGINE
+// ==========================================
+let adminConfiguredGeminiKeys: string[] = [];
+let geminiKeyCycleIndex = 0;
 
-  app.use(express.json({ limit: '50mb' })); // Allow large payloads for base64 certificates
+function parseRawKeys(input: any): string[] {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input.map(k => String(k).trim()).filter(k => k.length > 5);
+  }
+  const str = String(input);
+  return str
+    .split(/[\n,\r\s;]+/)
+    .map(k => k.trim())
+    .filter(k => k.length > 5);
+}
 
-  // API Routes
-  app.post("/api/generate-game", async (req, res) => {
+function maskApiKey(key: string): string {
+  if (!key || key.length < 8) return "******";
+  return key.slice(0, 7) + "..." + key.slice(-4);
+}
+
+function getAllAvailableGeminiKeys(): { key: string; source: 'env' | 'admin'; masked: string }[] {
+  const result: { key: string; source: 'env' | 'admin'; masked: string }[] = [];
+  const seen = new Set<string>();
+
+  // 1. Dari process.env.GEMINI_API_KEYS
+  const envKeysList = parseRawKeys(process.env.GEMINI_API_KEYS);
+  for (const k of envKeysList) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      result.push({ key: k, source: 'env', masked: maskApiKey(k) });
+    }
+  }
+
+  // 2. Dari process.env.GEMINI_API_KEY
+  const defaultEnvKeys = parseRawKeys(process.env.GEMINI_API_KEY);
+  for (const k of defaultEnvKeys) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      result.push({ key: k, source: 'env', masked: maskApiKey(k) });
+    }
+  }
+
+  // 3. Dari Admin Configured Keys (UI Admin Panel)
+  for (const k of adminConfiguredGeminiKeys) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      result.push({ key: k, source: 'admin', masked: maskApiKey(k) });
+    }
+  }
+
+  return result;
+}
+
+async function loadStoredGeminiKeys() {
+  try {
+    const docSnap = await db.collection("admin_settings").doc("gemini_keys").get();
+    if (docSnap.exists && docSnap.data()) {
+      const data = docSnap.data();
+      if (Array.isArray(data.keys)) {
+        adminConfiguredGeminiKeys = parseRawKeys(data.keys);
+        console.log(`[Gemini Pool] Berjaya memuatkan ${adminConfiguredGeminiKeys.length} kunci API dari pangkalan data.`);
+      }
+    }
+  } catch (err) {
+    console.warn("Notice loading stored Gemini keys:", err);
+  }
+}
+loadStoredGeminiKeys();
+
+async function callGeminiWithRotation<T>(
+  action: (ai: GoogleGenAI, apiKey: string, keyInfo: { index: number; total: number; masked: string }) => Promise<T>
+): Promise<{ result: T; keyUsed: string; keyIndex: number; totalKeys: number }> {
+  const pool = getAllAvailableGeminiKeys();
+  if (pool.length === 0) {
+    throw new Error("Tiada GEMINI_API_KEY ditemui dalam sistem atau panel Admin. Sila masukkan sekurang-kurangnya satu kunci API di Panel Pentadbiran (Admin).");
+  }
+
+  const totalKeys = pool.length;
+  const startIndex = geminiKeyCycleIndex % totalKeys;
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < totalKeys; attempt++) {
+    const currentIndex = (startIndex + attempt) % totalKeys;
+    const currentItem = pool[currentIndex];
+    const apiKey = currentItem.key;
+
     try {
-      const { idea, mode, topic, gradeLevel } = req.body;
-      if (!idea) {
-        return res.status(400).json({ error: "Sila berikan idea permainan/simulasi" });
-      }
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ 
-          error: "GEMINI_API_KEY tidak ditemui dalam persekitaran pelayan. Sila salin Prompt yang dijana untuk digunakan di Gemini." 
-        });
-      }
-
       const ai = new GoogleGenAI({
         apiKey,
         httpOptions: {
@@ -306,6 +376,155 @@ export const app = express();
           }
         }
       });
+
+      console.log(`[Gemini Cycle] Menjalankan panggilan AI guna Kunci #${currentIndex + 1}/${totalKeys} (${currentItem.masked})...`);
+      
+      const result = await action(ai, apiKey, {
+        index: currentIndex,
+        total: totalKeys,
+        masked: currentItem.masked
+      });
+
+      // Beralih secara kitaran (Round-Robin Cycle) untuk permintaan berikutnya
+      geminiKeyCycleIndex = (currentIndex + 1) % totalKeys;
+
+      return {
+        result,
+        keyUsed: currentItem.masked,
+        keyIndex: currentIndex + 1,
+        totalKeys
+      };
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = String(err?.message || err);
+      console.warn(`[Gemini Cycle] Kunci #${currentIndex + 1}/${totalKeys} (${currentItem.masked}) gagal: ${errMsg}`);
+
+      if (attempt < totalKeys - 1) {
+        console.warn(`[Gemini Cycle] Auto-failover: Berpindah ke kunci seterusnya (${currentIndex + 2}/${totalKeys})...`);
+        continue;
+      }
+    }
+  }
+
+  throw lastError || new Error("Semua Kunci API dalam kitaran telah dicuba tetapi gagal.");
+}
+
+export const app = express();
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+  app.use(express.json({ limit: '50mb' })); // Allow large payloads for base64 certificates
+
+  // Admin API Routes for Gemini Key Cycling
+  app.get("/api/admin/gemini-keys", async (req, res) => {
+    try {
+      const pool = getAllAvailableGeminiKeys();
+      const currentActiveIndex = pool.length > 0 ? (geminiKeyCycleIndex % pool.length) : 0;
+      res.json({
+        success: true,
+        totalKeys: pool.length,
+        currentActiveIndex: currentActiveIndex + 1,
+        rawKeysText: adminConfiguredGeminiKeys.join("\n"),
+        keys: pool.map((item, idx) => ({
+          id: idx + 1,
+          masked: item.masked,
+          source: item.source === 'env' ? 'Fail Persekitaran (.env)' : 'Panel Pentadbiran (Admin)',
+          isNext: idx === currentActiveIndex
+        }))
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/gemini-keys", async (req, res) => {
+    try {
+      const { keys } = req.body;
+      const parsed = parseRawKeys(keys);
+
+      adminConfiguredGeminiKeys = parsed;
+
+      try {
+        await db.collection("admin_settings").doc("gemini_keys").set({
+          keys: parsed,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (dbErr) {
+        console.warn("Notice saving gemini_keys to Firestore:", dbErr);
+      }
+
+      const pool = getAllAvailableGeminiKeys();
+      res.json({
+        success: true,
+        message: `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan!`,
+        totalKeys: pool.length,
+        currentActiveIndex: pool.length > 0 ? (geminiKeyCycleIndex % pool.length) + 1 : 0,
+        keys: pool.map((item, idx) => ({
+          id: idx + 1,
+          masked: item.masked,
+          source: item.source === 'env' ? 'Fail Persekitaran (.env)' : 'Panel Pentadbiran (Admin)'
+        }))
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/test-gemini-key", async (req, res) => {
+    try {
+      const pool = getAllAvailableGeminiKeys();
+      if (pool.length === 0) {
+        return res.status(400).json({ error: "Tiada kunci API Gemini ditemui dalam sistem." });
+      }
+
+      const results: any[] = [];
+      for (let i = 0; i < pool.length; i++) {
+        const item = pool[i];
+        try {
+          const ai = new GoogleGenAI({
+            apiKey: item.key,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
+          const resp = await ai.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: "Ujian sambungan ringkas. Jawab: OK.",
+          });
+          results.push({
+            id: i + 1,
+            masked: item.masked,
+            source: item.source === 'env' ? 'Env' : 'Admin',
+            status: 'Aktif & Sah (Token Berfungsi)',
+            success: true,
+            sample: resp.text?.slice(0, 30) || 'OK'
+          });
+        } catch (testErr: any) {
+          results.push({
+            id: i + 1,
+            masked: item.masked,
+            source: item.source === 'env' ? 'Env' : 'Admin',
+            status: 'Gagal / Had Kuota Dicapai',
+            success: false,
+            error: testErr.message || String(testErr)
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        totalTested: pool.length,
+        results
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API Routes
+  app.post("/api/generate-game", async (req, res) => {
+    try {
+      const { idea, mode, topic, gradeLevel } = req.body;
+      if (!idea) {
+        return res.status(400).json({ error: "Sila berikan idea permainan/simulasi" });
+      }
 
       const systemInstruction = `Anda ialah pakar reka bentuk permainan pendidikan interaktif KSSM dan simulasi sains berasaskan web (HTML5 Canvas / CSS3 / Web Audio API).
 Tugas anda adalah menjana kod HTML5 yang bersendirian (single-file HTML) berdasarkan idea guru.
@@ -331,47 +550,38 @@ Tingkatan: ${gradeLevel || 'Tingkatan 4'}.
 
 Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedia dimainkan!`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
+      const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
+        return await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: userPrompt,
+          config: {
+            systemInstruction,
+            responseMimeType: "application/json"
+          }
+        });
       });
 
       const text = response.text || "{}";
       const jsonResult = JSON.parse(text);
-      res.json(jsonResult);
+      res.json({
+        ...jsonResult,
+        keyUsed,
+        keyIndex,
+        totalKeys
+      });
     } catch (err: any) {
       console.error("Gagal menjana permainan dengan Gemini API:", err);
       res.status(500).json({ error: err.message || "Gagal menjana permainan dengan Gemini AI" });
     }
   });
 
-  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API
+  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling)
   app.post("/api/generate-question", async (req, res) => {
     try {
       const { prompt } = req.body;
       if (!prompt) {
         return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
       }
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({
-          error: "GEMINI_API_KEY tidak ditemui pada pelayan. Sila gunakan butang 'Buka Google Gemini' untuk menyalin prompt ke laman web Gemini."
-        });
-      }
-
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
 
       const systemInstruction = `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
 Tugas anda adalah menjana kod HTML5 lengkap (single-file HTML) berserta CSS (Tailwind CDN https://cdn.tailwindcss.com) dan JavaScript fungsional mengikut arahan prompt pengguna.
@@ -390,12 +600,14 @@ function tamatkanPermainan(markahAkhir) {
 Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
 5. PULANGKAN KOD HTML SAHAJA. Mulakan terus dengan <!DOCTYPE html> hingga </html>. Jangan letakkan teks sembang sebelum atau selepas kod.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: prompt,
-        config: {
-          systemInstruction,
-        }
+      const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
+        return await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: prompt,
+          config: {
+            systemInstruction,
+          }
+        });
       });
 
       let rawText = response.text || "";
@@ -423,7 +635,10 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
       res.json({
         success: true,
         html: htmlCode,
-        message: "Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!"
+        keyUsed,
+        keyIndex,
+        totalKeys,
+        message: `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
       });
     } catch (err: any) {
       console.error("Gagal menjana soalan dengan Gemini API:", err);

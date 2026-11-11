@@ -126,6 +126,18 @@ export default function App() {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiGenerationStatus, setAiGenerationStatus] = useState('');
 
+  // Gemini API Keys Pool & Rotation States
+  const [geminiKeysInput, setGeminiKeysInput] = useState('');
+  const [geminiPoolInfo, setGeminiPoolInfo] = useState<{
+    totalKeys: number;
+    currentActiveIndex: number;
+    keys: { id: number; masked: string; source: string; isNext?: boolean }[];
+  } | null>(null);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [isTestingKeys, setIsTestingKeys] = useState(false);
+  const [keyTestResults, setKeyTestResults] = useState<any[] | null>(null);
+  const [showKeysPlain, setShowKeysPlain] = useState(false);
+
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -426,6 +438,69 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       setIsConvertingDirect(false);
     }
   };
+
+  const fetchGeminiKeysStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/gemini-keys');
+      const data = await res.json();
+      if (data.success) {
+        setGeminiPoolInfo(data);
+        if (data.rawKeysText && !geminiKeysInput) {
+          setGeminiKeysInput(data.rawKeysText);
+        }
+      }
+    } catch (err) {
+      console.warn('Gagal memuatkan status kunci Gemini:', err);
+    }
+  };
+
+  const handleSaveGeminiKeys = async () => {
+    setIsSavingKeys(true);
+    try {
+      const res = await fetch('/api/admin/gemini-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: geminiKeysInput })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal menyimpan kunci API');
+      }
+      alert(`Berjaya! ${data.message}\nJumlah kunci aktif dalam sistem: ${data.totalKeys}.`);
+      await fetchGeminiKeysStatus();
+    } catch (err: any) {
+      console.error(err);
+      alert('Ralat semasa menyimpan kunci: ' + (err.message || err));
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
+  const handleTestGeminiKeys = async () => {
+    setIsTestingKeys(true);
+    try {
+      const res = await fetch('/api/admin/test-gemini-key', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal menguji kunci API');
+      }
+      setKeyTestResults(data.results || []);
+      const activeCount = (data.results || []).filter((r: any) => r.success).length;
+      alert(`Ujian Kitaran Selesai!\n\n${activeCount} daripada ${data.totalTested} kunci disahkan aktif & kuota sedia ada.`);
+      await fetchGeminiKeysStatus();
+    } catch (err: any) {
+      console.error(err);
+      alert('Ralat semasa menguji kunci: ' + (err.message || err));
+    } finally {
+      setIsTestingKeys(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminModalOpen) {
+      fetchGeminiKeysStatus();
+    }
+  }, [isAdminModalOpen]);
 
   const handlePreview = () => {
     setPreviewHtml(htmlCode);
@@ -2482,6 +2557,155 @@ function syncClassroom() {
                   <Sparkles className="w-4 h-4 text-emerald-200" />
                   <span>{isConvertingDirect ? 'Mengemas Kini...' : 'Tukar Semua Link Sheet1 ke Direct Link'}</span>
                 </button>
+              </div>
+
+              {/* PENGURUSAN KITARAN KUNCI API GEMINI (CYCLE & TOKEN RESILIENCE) */}
+              <div className="p-5 bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-blue-50/90 border-2 border-indigo-200 rounded-2xl flex flex-col gap-4 shadow-xs">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                      🔑
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                          Kitaran Kunci API Gemini (Cycle & Token Resilience)
+                        </h3>
+                        <span className="bg-purple-100 text-purple-800 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-purple-200 uppercase tracking-wide">
+                          Auto-Failover Aktif
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Sistem menggunakan kunci-kunci ini secara kitaran (Round-Robin Cycle). Jika kuota/token sesuatu kunci tamat, sistem automatik beralih ke kunci seterusnya tanpa gagal.
+                      </p>
+                    </div>
+                  </div>
+
+                  {geminiPoolInfo && (
+                    <div className="flex items-center gap-2 bg-white/90 border border-indigo-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-xs font-bold text-slate-700">
+                        {geminiPoolInfo.totalKeys} Kunci Aktif (Kitaran #{geminiPoolInfo.currentActiveIndex})
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Senarai Kunci dalam Kitaran */}
+                {geminiPoolInfo && geminiPoolInfo.keys && geminiPoolInfo.keys.length > 0 && (
+                  <div className="bg-white/85 p-3 rounded-xl border border-indigo-100 space-y-2">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                      <span>Senarai Kunci dalam Kitaran Pelayan:</span>
+                      <span className="text-indigo-600 font-semibold">{geminiPoolInfo.totalKeys} Kunci Bersedia</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {geminiPoolInfo.keys.map((k) => (
+                        <div 
+                          key={k.id} 
+                          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border font-mono transition shadow-2xs ${
+                            k.isNext 
+                              ? 'bg-purple-100 text-purple-900 border-purple-300 font-bold ring-2 ring-purple-300' 
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${k.isNext ? 'bg-purple-600 animate-pulse' : 'bg-slate-400'}`}></span>
+                          <span>#{k.id}: {k.masked}</span>
+                          <span className="text-[9px] px-1 py-0.2 bg-white/70 rounded text-slate-500 border border-slate-200 font-sans">
+                            {k.source.includes('Env') || k.source.includes('.env') ? 'Env' : 'Admin'}
+                          </span>
+                          {k.isNext && <span className="text-[10px] text-purple-700 font-bold ml-1 font-sans">★ Aktif Seterusnya</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Input Textarea Kunci API */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>📝 Masukkan Kunci API Gemini Anda</span>
+                      <span className="text-[10px] font-normal text-slate-500 lowercase hidden sm:inline">(satu baris setiap kunci atau pisahkan dengan koma)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowKeysPlain(!showKeysPlain)}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                    >
+                      {showKeysPlain ? '🙈 Sembunyikan Kunci' : '👁️ Tunjukkan Kunci'}
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows={4}
+                    value={geminiKeysInput}
+                    onChange={(e) => setGeminiKeysInput(e.target.value)}
+                    placeholder="Tampal semua API Key anda di sini (satu baris setiap satu kunci):&#10;AIzaSyD-xxxxxxxxxxxxxxxxxxxxxxxxx&#10;AIzaSyB-yyyyyyyyyyyyyyyyyyyyyyyyy&#10;AIzaSyC-zzzzzzzzzzzzzzzzzzzzzzzzz"
+                    className={`w-full p-3 text-xs font-mono border-2 border-indigo-200 rounded-xl bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition ${
+                      !showKeysPlain ? 'filter blur-[1.5px] hover:blur-none focus:blur-none' : ''
+                    }`}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    💡 <strong>Tip Kuota:</strong> Anda boleh menampal seberapa banyak kunci API dari akaun Google/AI Studio berbeza. Sistem akan mengagihkan beban dan sentiasa berputar secara harmoni supaya tidak mengalami kehabisan token.
+                  </p>
+                </div>
+
+                {/* Butang Tindakan Simpan & Uji */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveGeminiKeys}
+                    disabled={isSavingKeys}
+                    className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>💾</span>
+                    <span>{isSavingKeys ? 'Menyimpan ke Pelayan...' : 'Simpan Kunci API ke Kitaran Pelayan'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestGeminiKeys}
+                    disabled={isTestingKeys}
+                    className="w-full sm:w-auto bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-300 text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xs transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>⚡</span>
+                    <span>{isTestingKeys ? 'Menguji Semua Kunci...' : 'Uji Sambungan & Kuota Kunci'}</span>
+                  </button>
+                </div>
+
+                {/* Paparan Keputusan Ujian */}
+                {keyTestResults && (
+                  <div className="mt-2 p-3 bg-white border border-indigo-200 rounded-xl space-y-2">
+                    <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span>Keputusan Ujian Kuota Kunci API:</span>
+                      <button 
+                        onClick={() => setKeyTestResults(null)} 
+                        className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+                      >
+                        ✕ Tutup
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {keyTestResults.map((t: any) => (
+                        <div 
+                          key={t.id} 
+                          className={`p-2 rounded-lg text-xs flex items-center justify-between gap-2 border ${
+                            t.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-bold">Kunci #{t.id} ({t.masked}):</span>
+                            <span className="truncate">{t.status}</span>
+                          </div>
+                          <span className="font-bold shrink-0">{t.success ? '✓ Sedia' : '✗ Ralat'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Konfigurasi Sistem */}
