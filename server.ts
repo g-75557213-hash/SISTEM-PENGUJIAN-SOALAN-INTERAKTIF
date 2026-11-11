@@ -349,6 +349,88 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
+  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API
+  app.post("/api/generate-question", async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      if (!prompt) {
+        return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          error: "GEMINI_API_KEY tidak ditemui pada pelayan. Sila gunakan butang 'Buka Google Gemini' untuk menyalin prompt ke laman web Gemini."
+        });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
+
+      const systemInstruction = `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
+Tugas anda adalah menjana kod HTML5 lengkap (single-file HTML) berserta CSS (Tailwind CDN https://cdn.tailwindcss.com) dan JavaScript fungsional mengikut arahan prompt pengguna.
+Syarat WAJIB:
+1. Menghasilkan satu fail HTML yang lengkap dan bersedia untuk diuji serta-merta di dalam iframe.
+2. Sertakan sistem gamifikasi seperti skor, animasi butang, interaktiviti visual responsif, dan nyawa (hearts) mengikut jumlah yang diminta dalam prompt.
+3. Gunakan Web Audio API sintetik (synthesizer) untuk kesan bunyi atau muzik latar tanpa pautan fail audio luar.
+4. MESTI sertakan fungsi penyerahan markah:
+function tamatkanPermainan(markahAkhir) {
+  if (typeof window.hantarMarkahKeSistem === 'function') {
+    window.hantarMarkahKeSistem(markahAkhir);
+  } else {
+    alert("Permainan Tamat! Markah anda: " + markahAkhir + "%");
+  }
+}
+Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
+5. PULANGKAN KOD HTML SAHAJA. Mulakan terus dengan <!DOCTYPE html> hingga </html>. Jangan letakkan teks sembang sebelum atau selepas kod.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+        }
+      });
+
+      let rawText = response.text || "";
+      let htmlCode = rawText;
+
+      // Extract HTML from code block if model wrapped it in ```html ... ```
+      if (rawText.includes("```html")) {
+        const match = rawText.match(/```html\s*([\s\S]*?)\s*```/);
+        if (match && match[1]) {
+          htmlCode = match[1];
+        }
+      } else if (rawText.includes("```")) {
+        const match = rawText.match(/```\s*([\s\S]*?)\s*```/);
+        if (match && match[1]) {
+          htmlCode = match[1];
+        }
+      }
+
+      htmlCode = htmlCode.trim();
+
+      if (!htmlCode) {
+        return res.status(500).json({ error: "Gemini AI tidak memulangkan kod HTML yang sah. Sila cuba lagi." });
+      }
+
+      res.json({
+        success: true,
+        html: htmlCode,
+        message: "Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!"
+      });
+    } catch (err: any) {
+      console.error("Gagal menjana soalan dengan Gemini API:", err);
+      res.status(500).json({ error: err.message || "Ralat semasa menghubungi Gemini AI API" });
+    }
+  });
+
   // Classroom Roster Cache Endpoints
   app.post("/api/classroom-roster", async (req, res) => {
     try {

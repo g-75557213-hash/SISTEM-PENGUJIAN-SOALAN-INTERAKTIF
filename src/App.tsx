@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, AlertCircle, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube } from 'lucide-react';
+import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, AlertCircle, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube, ExternalLink, Zap, Loader2 } from 'lucide-react';
 import { initAuth, googleSignIn, logout, getAccessToken } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets, convertAllSheet1LinksToDirect } from './lib/sheets';
@@ -123,6 +123,8 @@ export default function App() {
   const [questionVideoLink, setQuestionVideoLink] = useState('');
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [isConvertingDirect, setIsConvertingDirect] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiGenerationStatus, setAiGenerationStatus] = useState('');
 
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -282,14 +284,14 @@ export default function App() {
     await logout();
   };
 
-  const handleCopyPrompt = () => {
+  const buildGeminiPrompt = () => {
     const kriteriaTambahan = promptKriteria.trim() ? `\nKRITERIA GURU (SANGAT PENTING - ANDA WAJIB IKUTI):\n${promptKriteria}\n` : '';
     const videoPrompt = videoUrl ? `\n\nSILA MASUKKAN VIDEO INI SEBAGAI RUJUKAN DI DALAM APLIKASI (Contohnya di bahagian tepi atau atas aplikasi):\n<video src="${videoUrl}" controls width="100%"></video>\nPastikan video ini berfungsi.\n` : '';
     const extVideoPrompt = questionVideoLink.trim() ? `\n\nSILA GUNAKAN PAUTAN VIDEO INI [${questionVideoLink}] SEBAGAI RUJUKAN ATAU PENGENALAN DI DALAM APLIKASI. Anda boleh memaparkannya menggunakan iframe atau menggunakannya sebagai konteks untuk soalan.\n` : '';
     const parsedNumQuestions = typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5);
     const nyawa = Math.max(1, Math.round(parsedNumQuestions / 3));
 
-    const prompt = `Bertindak sebagai Pakar Pembangun Web Interaktif Pendidikan (Gamified Learning). Tugas anda adalah membina aplikasi kuiz/soalan interaktif berasaskan web (single-file HTML) menggunakan HTML, Tailwind CSS, dan JavaScript yang SANGAT MENARIK, ESTETIK, DAN FUNGSIONAL.
+    return `Bertindak sebagai Pakar Pembangun Web Interaktif Pendidikan (Gamified Learning). Tugas anda adalah membina aplikasi kuiz/soalan interaktif berasaskan web (single-file HTML) menggunakan HTML, Tailwind CSS, dan JavaScript yang SANGAT MENARIK, ESTETIK, DAN FUNGSIONAL.
 
 Keperluan Utama:
 1. Kreativiti: Cipta soalan baru yang BERBEZA dari gambar contoh tetapi menguji topik/Standard Pembelajaran (SP) yang sama. Ubah nilai, watak, dan senario.
@@ -347,10 +349,62 @@ Anda perlu memanggil \`tamatkanPermainan(markahAkhir)\` secara automatik sebaik 
 Berikan sedikit penerangan ringkas tentang ciri-ciri utama soalan interaktif tersebut di bawah blok kod HTML.
 
 ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
+  };
 
-    navigator.clipboard.writeText(prompt);
-    alert('Prompt berjaya disalin! Anda boleh tampal (Paste) prompt ini ke Google Gemini.');
-    setShowPromptModal(false);
+  const handleGenerateWithAI = async () => {
+    setIsGeneratingAI(true);
+    setAiGenerationStatus('Sedang menghantar prompt dan memanggil Gemini AI...');
+    try {
+      const prompt = buildGeminiPrompt();
+      const res = await fetch('/api/generate-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Gagal menjana soalan daripada Gemini AI');
+      }
+
+      // Fill into code textarea and test immediately in live preview
+      setHtmlCode(data.html);
+      setPreviewHtml(data.html);
+      setShowPromptModal(false);
+      setActiveTab('bina');
+
+      alert('⚡ Hebat! Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!\n\nKod HTML telah dimasukkan ke editor dan kini sedia diuji pada panel Paparan Soalan Interaktif (Live Preview).');
+    } catch (err: any) {
+      console.error('Error generating question with AI:', err);
+      alert('Ralat semasa penjanaan automatik: ' + (err.message || err) + '\n\nAnda boleh menggunakan butang "Buka Google Gemini" untuk menyalin prompt secara manual.');
+    } finally {
+      setIsGeneratingAI(false);
+      setAiGenerationStatus('');
+    }
+  };
+
+  const handleOpenGeminiWeb = async () => {
+    const prompt = buildGeminiPrompt();
+    try {
+      await navigator.clipboard.writeText(prompt);
+      window.open('https://gemini.google.com', '_blank');
+      alert('📋 Prompt Gemini telah berjaya disalin ke papan keratan!\n\nTab Google Gemini telah dibuka. Sila Tampal (Paste / Ctrl+V) prompt tersebut ke dalam ruangan perbualan di Google Gemini.');
+      setShowPromptModal(false);
+    } catch (err) {
+      window.open('https://gemini.google.com', '_blank');
+      setShowPromptModal(false);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    const prompt = buildGeminiPrompt();
+    try {
+      await navigator.clipboard.writeText(prompt);
+      alert('Prompt berjaya disalin! Anda boleh tampal (Paste) prompt ini ke Google Gemini atau platform pilihan anda.');
+      setShowPromptModal(false);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleConvertSheet1ToDirect = async () => {
@@ -1236,10 +1290,10 @@ function syncClassroom() {
           <img src="https://i.ibb.co/qLXmgMqr/logo.png" alt="Logo" className="h-8 w-8 sm:h-10 sm:w-10 object-contain shrink-0" onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/40?text=Logo")} />
           <div className="min-w-0">
             <h1 className="font-extrabold text-base sm:text-xl leading-tight tracking-wide truncate bg-gradient-to-r from-white via-cyan-200 to-indigo-300 bg-clip-text text-transparent">
-              SISTEM PENGUJIAN & GAMIFIKASI SMK JENERI
+              SOALAN INTERAKTIF & GAMIFIKASI
             </h1>
             <p className="hidden sm:block text-xs text-cyan-300/80 truncate">
-              Platform Pendidikan Dual-Mod KSSM (Google Classroom & Gemini AI)
+              PLATFORM PENDIDIKAN DIGITAL DENGAN INTEGRASI GOOGLE CLASSROOM & GEMINI AI
             </p>
           </div>
         </div>
@@ -2104,23 +2158,66 @@ function syncClassroom() {
                 />
                 <p className="text-[10px] text-slate-500 mt-1.5 italic">Pautan ini akan disertakan dalam prompt untuk rujukan penjanaan soalan.</p>
               </div>
+
+              {isGeneratingAI && (
+                <div className="bg-indigo-50 border-2 border-indigo-300 rounded-xl p-4 flex items-center gap-3 animate-pulse">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-indigo-900">Gemini AI Sedang Menjana Kod Soalan Interaktif...</div>
+                    <div className="text-[11px] text-indigo-700 mt-0.5">{aiGenerationStatus || 'Sila tunggu sebentar sementara pelayan memproses permintaan anda.'}</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Pinned Bottom Footer Action Buttons */}
-            <div className="shrink-0 p-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+            <div className="shrink-0 p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col gap-3">
+              {/* Primary: 1-Click Gemini AI Generator */}
               <button 
-                onClick={() => setShowPromptModal(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200/70 transition border border-slate-300 cursor-pointer"
+                onClick={handleGenerateWithAI}
+                disabled={isGeneratingAI}
+                className="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:to-indigo-700 active:scale-[0.99] text-white py-3 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center transition shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer group"
               >
-                Batal
+                {isGeneratingAI ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin text-purple-200" />
+                    <span>Gemini AI Sedang Menjana Soalan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-5 h-5 mr-2 text-amber-300 fill-amber-300 group-hover:scale-110 transition-transform" />
+                    <span>⚡ Jana Terus Soalan Interaktif (1-Klik Gemini AI)</span>
+                  </>
+                )}
               </button>
-              <button 
-                onClick={handleCopyPrompt}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-95 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center transition shadow-md cursor-pointer"
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Salin Prompt Gemini
-              </button>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button 
+                  onClick={handleOpenGeminiWeb}
+                  disabled={isGeneratingAI}
+                  className="bg-blue-50 hover:bg-blue-100/90 text-blue-700 border border-blue-200 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center transition disabled:opacity-50 cursor-pointer"
+                  title="Salin prompt & buka laman Google Gemini di tab baru"
+                >
+                  <ExternalLink className="w-4 h-4 mr-1.5 shrink-0 text-blue-600" />
+                  <span className="truncate">🌐 Buka Gemini Web</span>
+                </button>
+                <button 
+                  onClick={handleCopyPrompt}
+                  disabled={isGeneratingAI}
+                  className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center transition disabled:opacity-50 cursor-pointer"
+                  title="Salin teks prompt sahaja ke papan keratan"
+                >
+                  <Copy className="w-4 h-4 mr-1.5 shrink-0 text-slate-500" />
+                  <span className="truncate">📋 Salin Prompt</span>
+                </button>
+                <button 
+                  onClick={() => setShowPromptModal(false)}
+                  disabled={isGeneratingAI}
+                  className="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-600 hover:bg-slate-200/70 transition border border-slate-200 bg-slate-100 cursor-pointer disabled:opacity-50"
+                >
+                  Batal
+                </button>
+              </div>
             </div>
           </div>
         </div>
