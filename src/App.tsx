@@ -442,7 +442,13 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   const fetchGeminiKeysStatus = async () => {
     try {
       const res = await fetch('/api/admin/gemini-keys');
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        return;
+      }
       if (data.success) {
         setGeminiPoolInfo(data);
         if (data.rawKeysText && !geminiKeysInput) {
@@ -462,7 +468,13 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keys: geminiKeysInput })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(text.length < 150 ? text : 'Pelayan tidak membalas dengan format yang sah. Sila semak sambungan rangkaian.');
+      }
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Gagal menyimpan kunci API');
       }
@@ -479,14 +491,29 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   const handleTestGeminiKeys = async () => {
     setIsTestingKeys(true);
     try {
-      const res = await fetch('/api/admin/test-gemini-key', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      // Hantar teks kunci yang sedang ditaip dalam kotak teks untuk ujian langsung
+      const res = await fetch('/api/admin/test-gemini-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: geminiKeysInput })
+      });
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(text.length < 150 ? text : 'Pelayan mengambil masa terlalu lama untuk membalas ujian. Sila cuba lagi sebentar.');
+      }
+      if (!data.success) {
         throw new Error(data.error || 'Gagal menguji kunci API');
       }
       setKeyTestResults(data.results || []);
       const activeCount = (data.results || []).filter((r: any) => r.success).length;
-      alert(`Ujian Kitaran Selesai!\n\n${activeCount} daripada ${data.totalTested} kunci disahkan aktif & kuota sedia ada.`);
+      if (activeCount > 0) {
+        alert(`Ujian Kitaran Selesai!\n\n${activeCount} daripada ${data.totalTested} kunci disahkan AKTIF & token sedia ada.`);
+      } else {
+        alert(`Ujian Kitaran Selesai!\n\nTiada kunci yang sah atau kuota tamat bagi ${data.totalTested} kunci yang diuji. Sila lihat perincian status di bawah.`);
+      }
       await fetchGeminiKeysStatus();
     } catch (err: any) {
       console.error(err);

@@ -471,50 +471,98 @@ export const app = express();
 
   app.post("/api/admin/test-gemini-key", async (req, res) => {
     try {
-      const pool = getAllAvailableGeminiKeys();
-      if (pool.length === 0) {
-        return res.status(400).json({ error: "Tiada kunci API Gemini ditemui dalam sistem." });
+      const { keys } = req.body || {};
+      let keysToTest: { key: string; source: string; masked: string }[] = [];
+
+      // If user passed keys directly in request body, parse and test them
+      if (keys && typeof keys === 'string' && keys.trim()) {
+        const parsed = parseRawKeys(keys);
+        keysToTest = parsed.map((k) => ({
+          key: k,
+          source: 'Panel Pentadbiran (Admin)',
+          masked: maskApiKey(k)
+        }));
       }
 
-      const results: any[] = [];
-      for (let i = 0; i < pool.length; i++) {
-        const item = pool[i];
+      // If no keys in body, fallback to all available keys in system
+      if (keysToTest.length === 0) {
+        keysToTest = getAllAvailableGeminiKeys();
+      }
+
+      if (keysToTest.length === 0) {
+        return res.status(200).json({ 
+          success: false, 
+          error: "Tiada kunci API Gemini dimasukkan. Sila taip atau tampal kunci API dalam ruangan kotak teks terlebih dahulu." 
+        });
+      }
+
+      // Test all keys concurrently in parallel with strict 5-second timeout to avoid any server gateway timeouts
+      const testPromises = keysToTest.map(async (item, i) => {
         try {
           const ai = new GoogleGenAI({
             apiKey: item.key,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const resp = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
-            contents: "Ujian sambungan ringkas. Jawab: OK.",
+
+          // Timeout 5 seconds per key
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("Masa tamat sambungan (Timeout > 5s). Sila semak sambungan internet anda.")), 5000);
           });
-          results.push({
+
+          const resp = await Promise.race([
+            ai.models.generateContent({
+              model: "gemini-3.8-flash",
+              contents: "Sahkan sambungan: balas OK.",
+            }),
+            timeoutPromise
+          ]);
+
+          return {
             id: i + 1,
             masked: item.masked,
-            source: item.source === 'env' ? 'Env' : 'Admin',
+            source: item.source,
             status: 'Aktif & Sah (Token Berfungsi)',
             success: true,
             sample: resp.text?.slice(0, 30) || 'OK'
-          });
+          };
         } catch (testErr: any) {
-          results.push({
+          const rawErr = String(testErr?.message || testErr);
+          let userFriendlyStatus = 'Ralat Kunci / Kuota';
+
+          if (rawErr.includes("API_KEY_INVALID") || rawErr.includes("API key not valid")) {
+            userFriendlyStatus = 'Kunci Tidak Sah (Invalid API Key)';
+          } else if (rawErr.includes("PERMISSION_DENIED") || rawErr.includes("billing")) {
+            userFriendlyStatus = 'Sekatan Projek / Perlu Billing';
+          } else if (rawErr.includes("RESOURCE_EXHAUSTED") || rawErr.includes("429") || rawErr.includes("quota")) {
+            userFriendlyStatus = 'Kuota Harian Habis (Rate Limit 429)';
+          } else if (rawErr.includes("Timeout")) {
+            userFriendlyStatus = 'Sambungan Perlahan (Timeout)';
+          }
+
+          return {
             id: i + 1,
             masked: item.masked,
-            source: item.source === 'env' ? 'Env' : 'Admin',
-            status: 'Gagal / Had Kuota Dicapai',
+            source: item.source,
+            status: userFriendlyStatus,
             success: false,
-            error: testErr.message || String(testErr)
-          });
+            error: rawErr.slice(0, 150)
+          };
         }
-      }
+      });
 
-      res.json({
+      const results = await Promise.all(testPromises);
+
+      return res.status(200).json({
         success: true,
-        totalTested: pool.length,
+        totalTested: results.length,
         results
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error("Error testing Gemini keys:", err);
+      return res.status(200).json({ 
+        success: false, 
+        error: err.message || "Ralat pelayan semasa menguji kunci" 
+      });
     }
   });
 
