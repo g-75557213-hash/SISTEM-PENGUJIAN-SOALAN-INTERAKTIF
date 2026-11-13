@@ -127,6 +127,8 @@ export default function App() {
   const [isConvertingDirect, setIsConvertingDirect] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiGenerationStatus, setAiGenerationStatus] = useState('');
+  const [aiActiveKeyBadge, setAiActiveKeyBadge] = useState('');
+  const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Gemini API Keys Pool & Rotation States
   const [geminiKeysInput, setGeminiKeysInput] = useState('');
@@ -367,12 +369,31 @@ Berikan sedikit penerangan ringkas tentang ciri-ciri utama soalan interaktif ter
 ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   };
 
+  const cleanPartialHtmlStream = (raw: string) => {
+    return raw
+      .replace(/^```html\s*\n?/i, '')
+      .replace(/^```\s*\n?/, '')
+      .replace(/\n?```\s*$/, '');
+  };
+
   const handleGenerateWithAI = async () => {
+    const prompt = buildGeminiPrompt();
+    const clientKeys = geminiKeysInput || (typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_keys') || '' : '');
+
+    // Tutup modal dan terus buka paparan editor Kod HTML supaya penulisan kod dapat dilihat secara real-time
+    setShowPromptModal(false);
+    setActiveTab('bina');
     setIsGeneratingAI(true);
-    setAiGenerationStatus('Sedang menghantar prompt dan memanggil Gemini AI...');
+    setHtmlCode('');
+    setPreviewHtml('');
+    setAiActiveKeyBadge('');
+    setAiGenerationStatus('Menghubungi Gemini AI & memulakan penstriman...');
+
+    setTimeout(() => {
+      codeTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+
     try {
-      const prompt = buildGeminiPrompt();
-      const clientKeys = geminiKeysInput || (typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_keys') || '' : '');
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,6 +402,7 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
 
       const contentType = res.headers.get('content-type') || '';
       let data: any = {};
+      let streamedRaw = '';
 
       if (contentType.includes('text/event-stream') && res.body) {
         const reader = res.body.getReader();
@@ -400,7 +422,30 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
             if (!dataLine) continue;
             try {
               const evt = JSON.parse(dataLine.slice(6));
-              if (evt.type === 'status' || evt.type === 'progress') {
+              if (evt.type === 'status') {
+                if (evt.message) setAiGenerationStatus(evt.message);
+              } else if (evt.type === 'reset') {
+                streamedRaw = '';
+                setHtmlCode('');
+                if (evt.message) setAiGenerationStatus(evt.message);
+              } else if (evt.type === 'chunk') {
+                const chunkStr = evt.text || '';
+                if (chunkStr) {
+                  streamedRaw += chunkStr;
+                  const cleaned = cleanPartialHtmlStream(streamedRaw);
+                  setHtmlCode(cleaned);
+                  if (evt.keyUsed) {
+                    setAiActiveKeyBadge(`Kunci #${evt.keyIndex}/${evt.totalKeys} (${evt.keyUsed})`);
+                  }
+                  const lineCount = cleaned.split('\n').length;
+                  setAiGenerationStatus(`AI sedang menulis kod HTML secara langsung... (${lineCount} baris)`);
+                  requestAnimationFrame(() => {
+                    if (codeTextareaRef.current) {
+                      codeTextareaRef.current.scrollTop = codeTextareaRef.current.scrollHeight;
+                    }
+                  });
+                }
+              } else if (evt.type === 'progress') {
                 if (evt.message) setAiGenerationStatus(evt.message);
               } else if (evt.type === 'done') {
                 data = evt;
@@ -412,6 +457,13 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
                 throw evtErr;
               }
             }
+          }
+        }
+
+        if (!data.success && streamedRaw.trim()) {
+          const fallbackCleaned = cleanPartialHtmlStream(streamedRaw).trim();
+          if (fallbackCleaned.includes('<html') || fallbackCleaned.includes('<!DOCTYPE')) {
+            data = { success: true, html: fallbackCleaned, message: 'Kod HTML berjaya dijana!' };
           }
         }
 
@@ -431,19 +483,17 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
         }
       }
 
-      // Fill into code textarea and test immediately in live preview
+      // Masukkan kod HTML akhir ke editor dan terus jalankan Live Preview
       setHtmlCode(data.html);
       setPreviewHtml(data.html);
-      setShowPromptModal(false);
-      setActiveTab('bina');
-
-      alert(`⚡ Hebat! Soalan interaktif berjaya dijana secara automatik oleh Gemini AI!\n\n${data.message || ''}\n\nKod HTML telah dimasukkan ke editor dan kini sedia diuji pada panel Paparan Soalan Interaktif (Live Preview).`);
+      setAiGenerationStatus('✅ Penjanaan kod selesai! Pratonton dibuka secara automatik.');
     } catch (err: any) {
       console.error('Error generating question with AI:', err);
-      alert('Ralat semasa penjanaan automatik: ' + (err.message || err) + '\n\nAnda boleh menggunakan butang "Buka Google Gemini" untuk menyalin prompt secara manual.');
+      alert('Ralat semasa penjanaan automatik: ' + (err.message || err) + '\n\nPastikan Kunci API Gemini yang sah telah dimasukkan di Panel Pentadbiran (Admin), atau gunakan butang "Buka Gemini Web".');
     } finally {
       setIsGeneratingAI(false);
-      setAiGenerationStatus('');
+      setAiActiveKeyBadge('');
+      setTimeout(() => setAiGenerationStatus(''), 3000);
     }
   };
 
@@ -1657,14 +1707,43 @@ function syncClassroom() {
               </div>
             </div>
             
-            <textarea 
+            {(isGeneratingAI || aiGenerationStatus) && (
+              <div className={`mb-2.5 p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 shrink-0 ${
+                isGeneratingAI
+                  ? 'bg-indigo-950 text-emerald-300 border-indigo-500 shadow-sm'
+                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  {isGeneratingAI ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-300 shrink-0" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  )}
+                  <span className="font-semibold truncate">{aiGenerationStatus}</span>
+                </div>
+                {aiActiveKeyBadge && (
+                  <span className="text-[10px] font-mono bg-indigo-900/90 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 shrink-0">
+                    {aiActiveKeyBadge}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <textarea
+              ref={codeTextareaRef}
               value={htmlCode}
+              readOnly={isGeneratingAI}
               onChange={(e) => setHtmlCode(e.target.value)}
-              placeholder="<!-- Tampal kod HTML interaktif anda di sini... -->"
-              className="flex-1 min-h-[150px] lg:min-h-0 w-full border border-slate-300 rounded-lg p-3 font-mono text-sm resize-y lg:resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder={isGeneratingAI ? "Sedang menerima kod HTML dari Gemini AI baris demi baris..." : "<!-- Tampal kod HTML interaktif anda di sini... -->"}
+              className={`flex-1 min-h-[150px] lg:min-h-0 w-full border rounded-lg p-3 font-mono text-xs sm:text-sm resize-y lg:resize-none outline-none transition ${
+                isGeneratingAI
+                  ? 'bg-slate-950 text-emerald-300 border-indigo-500 ring-2 ring-indigo-300 shadow-inner'
+                  : 'border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+              }`}
             />
-            <div className="text-right text-xs text-slate-400 mt-1 mb-4 shrink-0">
-              {htmlCode.length} aksara
+            <div className="flex items-center justify-between text-xs text-slate-400 mt-1 mb-4 shrink-0">
+              <span>{htmlCode ? `${htmlCode.split('\n').length} baris` : '0 baris'}</span>
+              <span>{htmlCode.length.toLocaleString()} aksara</span>
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 shrink-0">
@@ -1821,11 +1900,29 @@ function syncClassroom() {
           
           <div className="flex-1 bg-slate-100 p-4 flex items-center justify-center overflow-auto relative">
             {!previewHtml ? (
-              <div className="text-center text-slate-400">
-                <Monitor className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                <h3 className="text-lg font-medium text-slate-500 mb-1">Pratonton kod anda akan muncul di sini.</h3>
-                <p className="text-sm">Tekan <span className="font-bold">UJI KOD</span> untuk bermula.</p>
-              </div>
+              isGeneratingAI ? (
+                <div className="text-center max-w-md mx-auto p-6 bg-white rounded-2xl border border-indigo-200 shadow-sm">
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-md">
+                    <Loader2 className="w-7 h-7 text-white animate-spin" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-800 mb-1.5">
+                    ⚡ Gemini AI Sedang Menulis Kod Soalan...
+                  </h3>
+                  <p className="text-xs text-slate-600 leading-relaxed mb-3">
+                    Lihat ruangan <strong>Kod HTML Soalan</strong> di sebelah kiri—kod sedang dijana baris demi baris secara masa nyata. Pratonton interaktif akan dipaparkan secara automatik sebaik sahaja selesai.
+                  </p>
+                  <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>{htmlCode ? `${htmlCode.split('\n').length} baris • ${htmlCode.length.toLocaleString()} aksara` : 'Menghubungi pelayan AI...'}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-slate-400">
+                  <Monitor className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                  <h3 className="text-lg font-medium text-slate-500 mb-1">Pratonton kod anda akan muncul di sini.</h3>
+                  <p className="text-sm">Tekan <span className="font-bold">UJI KOD</span> untuk bermula.</p>
+                </div>
+              )
             ) : (
               <div 
                 className={`bg-white shadow-lg border border-slate-200 transition-all duration-300 ease-in-out flex flex-col ${

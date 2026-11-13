@@ -838,30 +838,37 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
       sendEvent({ type: 'status', message: 'Memulakan sambungan pantas ke Gemini AI...' });
 
       try {
+        let isFirstAttempt = true;
         const { result: htmlCode, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai, _apiKey, keyInfo) => {
-          sendEvent({
-            type: 'status',
-            message: `Menjana soalan dengan Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
-          });
+          if (!isFirstAttempt) {
+            sendEvent({
+              type: 'reset',
+              message: `Menukar ke Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+            });
+          } else {
+            isFirstAttempt = false;
+            sendEvent({
+              type: 'status',
+              message: `Menjana kod HTML dengan Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+            });
+          }
 
           const responseStream = await generateContentStreamWithFallback(ai, prompt, {
             systemInstruction,
           });
 
           let fullText = "";
-          let lastEmitLen = 0;
           for await (const chunk of responseStream) {
             const chunkText = chunk.text || "";
             if (chunkText) {
               fullText += chunkText;
-              if (fullText.length - lastEmitLen >= 400) {
-                lastEmitLen = fullText.length;
-                sendEvent({
-                  type: 'progress',
-                  chars: fullText.length,
-                  message: `Sedang menulis kod HTML interaktif... (${fullText.length.toLocaleString()} aksara)`
-                });
-              }
+              sendEvent({
+                type: 'chunk',
+                text: chunkText,
+                keyUsed: keyInfo.masked,
+                keyIndex: keyInfo.index + 1,
+                totalKeys: keyInfo.total
+              });
             }
           }
 
