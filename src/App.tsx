@@ -110,6 +110,8 @@ export default function App() {
   const [htmlCode, setHtmlCode] = useState('');
   const [previewHtml, setPreviewHtml] = useState('');
   const [numQuestions, setNumQuestions] = useState<number | string>(5);
+  const [numLives, setNumLives] = useState<number | string>(2);
+  const [isCustomLives, setIsCustomLives] = useState<boolean>(false);
   
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | 'fullscreen'>('desktop');
   const [previewHeight, setPreviewHeight] = useState<number>(650);
@@ -301,7 +303,9 @@ export default function App() {
     const videoPrompt = videoUrl ? `\n\nSILA MASUKKAN VIDEO INI SEBAGAI RUJUKAN DI DALAM APLIKASI (Contohnya di bahagian tepi atau atas aplikasi):\n<video src="${videoUrl}" controls width="100%"></video>\nPastikan video ini berfungsi.\n` : '';
     const extVideoPrompt = questionVideoLink.trim() ? `\n\nSILA GUNAKAN PAUTAN VIDEO INI [${questionVideoLink}] SEBAGAI RUJUKAN ATAU PENGENALAN DI DALAM APLIKASI. Anda boleh memaparkannya menggunakan iframe atau menggunakannya sebagai konteks untuk soalan.\n` : '';
     const parsedNumQuestions = typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5);
-    const nyawa = Math.max(1, Math.round(parsedNumQuestions / 3));
+    const defaultNyawa = Math.max(1, Math.round(parsedNumQuestions / 3));
+    const parsedNumLives = typeof numLives === 'number' ? numLives : (parseInt(String(numLives), 10) || defaultNyawa);
+    const nyawa = isCustomLives ? Math.max(1, parsedNumLives) : defaultNyawa;
 
     return `Bertindak sebagai Pakar Pembangun Web Interaktif Pendidikan (Gamified Learning). Tugas anda adalah membina aplikasi kuiz/soalan interaktif berasaskan web (single-file HTML) menggunakan HTML, Tailwind CSS, dan JavaScript yang SANGAT MENARIK, ESTETIK, DAN FUNGSIONAL.
 
@@ -318,7 +322,7 @@ KRITERIA WAJIB:
 - **Tema Beridentiti:** Setiap set soalan mempunyai reka bentuk visual (tema warna, susun atur) yang unik mengikut topik (cth: Fizik - Kosmik, Matematik - Retro).
 - **Audio (Web Audio API):** WAJIB guna Web Audio API untuk mensintesis muzik latar (synthesia) yang sedap didengar, menenangkan (lo-fi/ambient/pad) secara berulang (loop) dengan kelantangan perlahan. JANGAN guna link audio/mp3 luar! Hasilkan kord/melodi sintesis yang merdu menggunakan gabungan oscillator (sine/triangle). Sertakan juga bunyi Sfx untuk jawapan betul/salah. Sediakan butang Mute/Unmute.
 - **Animasi Penuh:** Wajib ada animasi masuk/keluar yang menyeluruh bagi setiap elemen UI, menggunakan CSS animasi keyframes atau RequestAnimationFrame.
-- **Nyawa:** Memandangkan ada ${parsedNumQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️ (Secara nisbah 3 soalan = 1 nyawa, contohnya 15 soalan = 5 nyawa). Jika jawapan salah, tolak 1 nyawa.
+- **Nyawa:** Memandangkan ada ${parsedNumQuestions} soalan, berikan pelajar TEPAT ${nyawa} NYAWA (lives) ❤️ ${isCustomLives ? '(Tetapan nyawa khas oleh guru)' : '(Secara nisbah 3 soalan = 1 nyawa, contohnya 15 soalan = 5 nyawa)'}. Jika jawapan salah, tolak 1 nyawa.
 - **Bilangan Soalan:** Cipta TEPAT ${parsedNumQuestions} soalan berperingkat.
 - **Dwibahasa:** Arahan paparan dalam Bahasa Melayu (tebal) dan terjemahan Bahasa Inggeris (condong).
 
@@ -372,19 +376,59 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, keys: clientKeys })
+        body: JSON.stringify({ prompt, keys: clientKeys, stream: true })
       });
 
-      const text = await res.text();
+      const contentType = res.headers.get('content-type') || '';
       let data: any = {};
-      try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        throw new Error(text.length < 200 ? text : 'Pelayan tidak dapat memproses penjanaan soalan. Sila semak sambungan rangkaian atau kunci API Gemini anda.');
-      }
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Gagal menjana soalan daripada Gemini AI');
+      if (contentType.includes('text/event-stream') && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const block of lines) {
+            const dataLine = block.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+            try {
+              const evt = JSON.parse(dataLine.slice(6));
+              if (evt.type === 'status' || evt.type === 'progress') {
+                if (evt.message) setAiGenerationStatus(evt.message);
+              } else if (evt.type === 'done') {
+                data = evt;
+              } else if (evt.type === 'error') {
+                throw new Error(evt.error || 'Gagal menjana soalan daripada Gemini AI');
+              }
+            } catch (evtErr: any) {
+              if (evtErr?.message && !evtErr.message.includes('JSON')) {
+                throw evtErr;
+              }
+            }
+          }
+        }
+
+        if (!data.success || !data.html) {
+          throw new Error(data.error || 'Penstriman selesai tanpa kod HTML lengkap. Sila cuba lagi.');
+        }
+      } else {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error(text.length < 200 ? text : 'Pelayan tidak dapat memproses penjanaan soalan. Sila semak sambungan rangkaian atau kunci API Gemini anda.');
+        }
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Gagal menjana soalan daripada Gemini AI');
+        }
       }
 
       // Fill into code textarea and test immediately in live preview
@@ -2167,42 +2211,99 @@ function syncClassroom() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
-              {/* Bilangan Soalan */}
-              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-1.5">
+              {/* Bilangan Soalan & Nyawa (Boleh Diedit) */}
+              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
                   <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <span className="text-base">🔢</span> Bilangan Soalan
+                    <span className="text-base">🔢</span> Bilangan Soalan & Nyawa
                   </label>
                   <span className="text-xs font-semibold text-blue-700 bg-blue-100/80 px-2.5 py-0.5 rounded-full">
                     Cadangan: 1 - 20 Soalan
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 mb-3">
-                  Tentukan jumlah soalan yang ingin dicipta oleh Gemini AI. Sistem akan mengira bilangan soalan dan bilangan nyawa secara automatik dalam prompt.
+                <p className="text-xs text-slate-600">
+                  Secara default, sistem mengira nisbah <strong>3 soalan = 1 nyawa</strong> (cth: 15 soalan = 5 nyawa). Anda juga boleh mengedit bilangan nyawa secara manual mengikut kesesuaian.
                 </p>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="number"
-                    value={numQuestions}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '') {
-                        setNumQuestions('');
-                      } else {
-                        const parsed = parseInt(val, 10);
-                        setNumQuestions(isNaN(parsed) ? '' : Math.max(1, parsed));
-                      }
-                    }}
-                    placeholder="5"
-                    min="1"
-                    max="50"
-                    className="w-24 h-11 border-2 border-blue-300 rounded-xl text-center text-base font-black text-slate-900 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition shadow-xs"
-                  />
-                  <div className="text-xs text-slate-600 font-medium">
-                    <span className="font-bold text-slate-800">soalan</span> &bull; Pelajar akan diperuntukkan{' '}
-                    <span className="font-black text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
-                      ❤️ {Math.max(1, Math.round((typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5)) / 3))} Nyawa
-                    </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Input Bilangan Soalan */}
+                  <div className="bg-white p-3 rounded-xl border border-blue-200">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      🔢 Bilangan Soalan
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number"
+                        value={numQuestions}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setNumQuestions('');
+                          } else {
+                            const parsed = parseInt(val, 10);
+                            const validNum = isNaN(parsed) ? '' : Math.max(1, parsed);
+                            setNumQuestions(validNum);
+                            if (!isCustomLives && typeof validNum === 'number') {
+                              setNumLives(Math.max(1, Math.round(validNum / 3)));
+                            }
+                          }
+                        }}
+                        placeholder="5"
+                        min="1"
+                        max="50"
+                        className="w-24 h-10 border-2 border-blue-300 rounded-xl text-center text-base font-black text-slate-900 bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none transition shadow-xs"
+                      />
+                      <span className="text-xs font-bold text-slate-700">soalan</span>
+                    </div>
+                  </div>
+
+                  {/* Input Bilangan Nyawa (Boleh Diedit) */}
+                  <div className="bg-white p-3 rounded-xl border border-red-200">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-bold text-red-600 uppercase tracking-wider">
+                        ❤️ Bilangan Nyawa
+                      </label>
+                      {isCustomLives ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const parsedQ = typeof numQuestions === 'number' ? numQuestions : (parseInt(String(numQuestions), 10) || 5);
+                            setIsCustomLives(false);
+                            setNumLives(Math.max(1, Math.round(parsedQ / 3)));
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                        >
+                          ↺ Reset Nisbah Auto
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          Auto (3:1)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number"
+                        value={numLives}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setIsCustomLives(true);
+                          if (val === '') {
+                            setNumLives('');
+                          } else {
+                            const parsed = parseInt(val, 10);
+                            setNumLives(isNaN(parsed) ? '' : Math.max(1, parsed));
+                          }
+                        }}
+                        placeholder="2"
+                        min="1"
+                        max="50"
+                        className="w-24 h-10 border-2 border-red-300 rounded-xl text-center text-base font-black text-red-600 bg-white focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none transition shadow-xs"
+                      />
+                      <span className="text-xs font-bold text-slate-700">
+                        nyawa {isCustomLives ? '(Manual)' : '(Default)'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2701,16 +2802,32 @@ function syncClassroom() {
                     </button>
                   </div>
 
-                  <textarea
-                    rows={4}
-                    value={geminiKeysInput}
-                    onChange={(e) => setGeminiKeysInput(e.target.value)}
-                    placeholder="Tampal semua API Key anda di sini (satu baris setiap satu kunci):&#10;AIzaSyD-xxxxxxxxxxxxxxxxxxxxxxxxx&#10;AIzaSyB-yyyyyyyyyyyyyyyyyyyyyyyyy&#10;AIzaSyC-zzzzzzzzzzzzzzzzzzzzzzzzz"
-                    className={`w-full p-3 text-xs font-mono border-2 border-indigo-200 rounded-xl bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition ${
-                      !showKeysPlain ? 'filter blur-[1.5px] hover:blur-none focus:blur-none' : ''
-                    }`}
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  <div className="relative">
+                    <textarea
+                      rows={4}
+                      value={geminiKeysInput}
+                      onChange={(e) => setGeminiKeysInput(e.target.value)}
+                      placeholder="Tampal semua API Key anda di sini (satu baris setiap satu kunci):&#10;AIzaSyD-xxxxxxxxxxxxxxxxxxxxxxxxx&#10;AIzaSyB-yyyyyyyyyyyyyyyyyyyyyyyyy&#10;AIzaSyC-zzzzzzzzzzzzzzzzzzzzzzzzz"
+                      className={`w-full p-3 text-xs font-mono border-2 border-indigo-200 rounded-xl bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition ${
+                        geminiKeysInput.trim().length > 0 && !showKeysPlain
+                          ? 'blur-[9px] select-none opacity-75'
+                          : ''
+                      }`}
+                    />
+                    {geminiKeysInput.trim().length > 0 && !showKeysPlain && (
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] font-semibold text-indigo-700 bg-indigo-50/90 border border-indigo-200 px-3 py-1.5 rounded-lg">
+                        <span>🔒 Mod Kabur Privasi Aktif (Kunci dikaburkan sepenuhnya)</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowKeysPlain(true)}
+                          className="text-indigo-700 hover:text-indigo-900 underline font-bold cursor-pointer"
+                        >
+                          Klik untuk Lihat
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
                     💡 <strong>Tip Kuota:</strong> Anda boleh menampal seberapa banyak kunci API dari akaun Google/AI Studio berbeza. Sistem akan mengagihkan beban dan sentiasa berputar secara harmoni supaya tidak mengalami kehabisan token.
                   </p>
                 </div>

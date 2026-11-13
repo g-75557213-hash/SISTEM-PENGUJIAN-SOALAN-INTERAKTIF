@@ -2,8 +2,13 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { GoogleGenAI } from "@google/genai";
+import dotenv from "dotenv";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { initializeApp } from "firebase/app";
+
+try {
+  dotenv.config();
+} catch {}
 import {
   getFirestore,
   collection,
@@ -353,6 +358,28 @@ function getAllAvailableGeminiKeys(extraKeys?: any): { key: string; source: 'env
   return result;
 }
 
+function syncEnvGeminiKeys(keys: string[]) {
+  const joined = keys.join(",");
+  process.env.GEMINI_API_KEYS = joined;
+
+  // Kemas kini fail .env tempatan/pelayan jika sistem fail boleh ditulis (bukan Vercel read-only)
+  if (!process.env.VERCEL) {
+    try {
+      const envPath = path.join(process.cwd(), ".env");
+      let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+      const lineValue = `GEMINI_API_KEYS="${joined}"`;
+      if (/^GEMINI_API_KEYS=.*$/m.test(content)) {
+        content = content.replace(/^GEMINI_API_KEYS=.*$/m, lineValue);
+      } else {
+        content = (content.trimEnd() ? content.trimEnd() + "\n" : "") + lineValue + "\n";
+      }
+      fs.writeFileSync(envPath, content, "utf8");
+    } catch (e) {
+      console.warn("Notice updating .env GEMINI_API_KEYS:", e);
+    }
+  }
+}
+
 let geminiKeysLoadedOnce = false;
 async function loadStoredGeminiKeys() {
   if (geminiKeysLoadedOnce) return;
@@ -365,7 +392,11 @@ async function loadStoredGeminiKeys() {
     if (docSnap && docSnap.exists && docSnap.data()) {
       const data = docSnap.data();
       if (Array.isArray(data.keys)) {
-        adminConfiguredGeminiKeys = parseRawKeys(data.keys);
+        const cleaned = parseRawKeys(data.keys).filter(k => !k.startsWith("AIzaSyD_TEST"));
+        adminConfiguredGeminiKeys = cleaned;
+        if (cleaned.length > 0 && !process.env.GEMINI_API_KEYS) {
+          process.env.GEMINI_API_KEYS = cleaned.join(",");
+        }
         console.log(`[Gemini Pool] Berjaya memuatkan ${adminConfiguredGeminiKeys.length} kunci API dari pangkalan data.`);
       }
     }
@@ -379,6 +410,16 @@ if (!process.env.VERCEL) {
 
 const GEMINI_MODEL_CANDIDATES = ["gemini-4-hydrogen", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
 
+function buildModelConfig(modelName: string, baseConfig?: any) {
+  const cfg = { ...(baseConfig || {}) };
+  if (modelName === "gemini-4-hydrogen") {
+    cfg.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+  } else if (modelName === "gemini-2.5-flash") {
+    cfg.thinkingConfig = { thinkingBudget: 0 };
+  }
+  return cfg;
+}
+
 async function generateContentWithFallback(
   ai: GoogleGenAI,
   contents: any,
@@ -387,10 +428,42 @@ async function generateContentWithFallback(
   let lastError: any = null;
   for (const modelName of GEMINI_MODEL_CANDIDATES) {
     try {
+      const modelConfig = buildModelConfig(modelName, config);
       return await ai.models.generateContent({
         model: modelName,
         contents,
-        ...(config ? { config } : {})
+        ...(Object.keys(modelConfig).length > 0 ? { config: modelConfig } : {})
+      });
+    } catch (err: any) {
+      lastError = err;
+      const msg = String(err?.message || err);
+      const isModelNotFound =
+        msg.includes("404") ||
+        msg.includes("NOT_FOUND") ||
+        msg.includes("not found") ||
+        msg.includes("is not supported");
+      if (isModelNotFound) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
+async function generateContentStreamWithFallback(
+  ai: GoogleGenAI,
+  contents: any,
+  config?: any
+) {
+  let lastError: any = null;
+  for (const modelName of GEMINI_MODEL_CANDIDATES) {
+    try {
+      const modelConfig = buildModelConfig(modelName, config);
+      return await ai.models.generateContentStream({
+        model: modelName,
+        contents,
+        ...(Object.keys(modelConfig).length > 0 ? { config: modelConfig } : {})
       });
     } catch (err: any) {
       lastError = err;
@@ -504,20 +577,18 @@ export const app = express();
       const { keys } = req.body || {};
       const parsed = parseRawKeys(keys);
 
-      if (parsed.length > 0) {
-        adminConfiguredGeminiKeys = parsed;
-      }
+      adminConfiguredGeminiKeys = parsed;
+      syncEnvGeminiKeys(parsed);
 
       // Best effort save to Firestore with strict 1.5s timeout so it NEVER blocks Vercel / serverless
       try {
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500));
-        await Promise.race([
-          db.collection("admin_settings").doc("gemini_keys").set({
-            keys: parsed,
-            updatedAt: FieldValue.serverTimestamp()
-          }, { merge: true }),
-          timeoutPromise
-        ]);
+        const dbSetPromise = db.collection("admin_settings").doc("gemini_keys").set({
+          keys: parsed,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        dbSetPromise.catch(() => {});
+        await Promise.race([dbSetPromise, timeoutPromise]);
       } catch (dbErr) {
         console.warn("Notice saving gemini_keys to Firestore:", dbErr);
       }
@@ -525,7 +596,7 @@ export const app = express();
       const pool = getAllAvailableGeminiKeys(parsed);
       return res.status(200).json({
         success: true,
-        message: `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan!`,
+        message: `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan & pembolehubah persekitaran GEMINI_API_KEYS!`,
         totalKeys: pool.length,
         currentActiveIndex: pool.length > 0 ? (geminiKeyCycleIndex % pool.length) + 1 : 0,
         keys: pool.map((item, idx) => ({
@@ -708,15 +779,30 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
-  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling)
+  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling) + SSE Streaming
   app.post(["/api/generate-question", "/generate-question"], async (req, res) => {
-    try {
-      const { prompt, keys: clientKeys } = req.body;
-      if (!prompt) {
-        return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
-      }
+    const { prompt, keys: clientKeys, stream } = req.body || {};
+    if (!prompt) {
+      return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
+    }
 
-      const systemInstruction = `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
+    const extractHtmlCode = (rawText: string) => {
+      let htmlCode = rawText || "";
+      if (htmlCode.includes("```html")) {
+        const match = htmlCode.match(/```html\s*([\s\S]*?)\s*```/);
+        if (match && match[1]) {
+          htmlCode = match[1];
+        }
+      } else if (htmlCode.includes("```")) {
+        const match = htmlCode.match(/```\s*([\s\S]*?)\s*```/);
+        if (match && match[1]) {
+          htmlCode = match[1];
+        }
+      }
+      return htmlCode.trim();
+    };
+
+    const systemInstruction = `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
 Tugas anda adalah menjana kod HTML5 lengkap (single-file HTML) berserta CSS (Tailwind CDN https://cdn.tailwindcss.com) dan JavaScript fungsional mengikut arahan prompt pengguna.
 Syarat WAJIB:
 1. Menghasilkan satu fail HTML yang lengkap dan bersedia untuk diuji serta-merta di dalam iframe.
@@ -733,35 +819,94 @@ function tamatkanPermainan(markahAkhir) {
 Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
 5. PULANGKAN KOD HTML SAHAJA. Mulakan terus dengan <!DOCTYPE html> hingga </html>. Jangan letakkan teks sembang sebelum atau selepas kod.`;
 
+    // Mod penstriman (SSE) untuk mengelakkan timeout serverless Vercel / proksi
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof (res as any).flushHeaders === 'function') {
+        (res as any).flushHeaders();
+      }
+
+      const sendEvent = (payload: any) => {
+        try {
+          res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        } catch {}
+      };
+
+      sendEvent({ type: 'status', message: 'Memulakan sambungan pantas ke Gemini AI...' });
+
+      try {
+        const { result: htmlCode, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai, _apiKey, keyInfo) => {
+          sendEvent({
+            type: 'status',
+            message: `Menjana soalan dengan Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+          });
+
+          const responseStream = await generateContentStreamWithFallback(ai, prompt, {
+            systemInstruction,
+          });
+
+          let fullText = "";
+          let lastEmitLen = 0;
+          for await (const chunk of responseStream) {
+            const chunkText = chunk.text || "";
+            if (chunkText) {
+              fullText += chunkText;
+              if (fullText.length - lastEmitLen >= 400) {
+                lastEmitLen = fullText.length;
+                sendEvent({
+                  type: 'progress',
+                  chars: fullText.length,
+                  message: `Sedang menulis kod HTML interaktif... (${fullText.length.toLocaleString()} aksara)`
+                });
+              }
+            }
+          }
+
+          const cleaned = extractHtmlCode(fullText);
+          if (!cleaned) {
+            throw new Error("Gemini AI tidak memulangkan kod HTML yang sah.");
+          }
+          return cleaned;
+        }, clientKeys);
+
+        sendEvent({
+          type: 'done',
+          success: true,
+          html: htmlCode,
+          keyUsed,
+          keyIndex,
+          totalKeys,
+          message: `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
+        });
+        return res.end();
+      } catch (err: any) {
+        console.error("Gagal menjana soalan (stream) dengan Gemini API:", err);
+        sendEvent({
+          type: 'error',
+          success: false,
+          error: err.message || "Ralat semasa menghubungi Gemini AI API"
+        });
+        return res.end();
+      }
+    }
+
+    // Mod JSON biasa
+    try {
       const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
         return await generateContentWithFallback(ai, prompt, {
           systemInstruction,
         });
       }, clientKeys);
 
-      let rawText = response.text || "";
-      let htmlCode = rawText;
-
-      // Extract HTML from code block if model wrapped it in ```html ... ```
-      if (rawText.includes("```html")) {
-        const match = rawText.match(/```html\s*([\s\S]*?)\s*```/);
-        if (match && match[1]) {
-          htmlCode = match[1];
-        }
-      } else if (rawText.includes("```")) {
-        const match = rawText.match(/```\s*([\s\S]*?)\s*```/);
-        if (match && match[1]) {
-          htmlCode = match[1];
-        }
-      }
-
-      htmlCode = htmlCode.trim();
-
+      const htmlCode = extractHtmlCode(response.text || "");
       if (!htmlCode) {
         return res.status(500).json({ error: "Gemini AI tidak memulangkan kod HTML yang sah. Sila cuba lagi." });
       }
 
-      res.json({
+      return res.json({
         success: true,
         html: htmlCode,
         keyUsed,
@@ -771,7 +916,7 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
       });
     } catch (err: any) {
       console.error("Gagal menjana soalan dengan Gemini API:", err);
-      res.status(500).json({ error: err.message || "Ralat semasa menghubungi Gemini AI API" });
+      return res.status(500).json({ error: err.message || "Ralat semasa menghubungi Gemini AI API" });
     }
   });
 
