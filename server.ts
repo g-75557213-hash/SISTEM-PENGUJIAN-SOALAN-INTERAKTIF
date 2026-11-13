@@ -18,8 +18,16 @@ import {
   QueryConstraint
 } from "firebase/firestore";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let __safeDirname = process.cwd();
+try {
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    __safeDirname = path.dirname(fileURLToPath(import.meta.url));
+  } else if (typeof __dirname !== "undefined") {
+    __safeDirname = __dirname;
+  }
+} catch {
+  __safeDirname = process.cwd();
+}
 
 // Read Firebase config to get dynamic projectId and firestoreDatabaseId
 let firebaseConfig: any = {
@@ -33,8 +41,8 @@ let firebaseConfig: any = {
 try {
   const possiblePaths = [
     path.join(process.cwd(), "firebase-applet-config.json"),
-    path.join(__dirname, "firebase-applet-config.json"),
-    path.join(__dirname, "..", "firebase-applet-config.json")
+    path.join(__safeDirname, "firebase-applet-config.json"),
+    path.join(__safeDirname, "..", "firebase-applet-config.json")
   ];
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
@@ -345,13 +353,15 @@ function getAllAvailableGeminiKeys(extraKeys?: any): { key: string; source: 'env
   return result;
 }
 
+let geminiKeysLoadedOnce = false;
 async function loadStoredGeminiKeys() {
+  if (geminiKeysLoadedOnce) return;
+  geminiKeysLoadedOnce = true;
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500));
-    const docSnap: any = await Promise.race([
-      db.collection("admin_settings").doc("gemini_keys").get(),
-      timeoutPromise
-    ]);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1200));
+    const dbPromise = db.collection("admin_settings").doc("gemini_keys").get();
+    dbPromise.catch(() => {});
+    const docSnap: any = await Promise.race([dbPromise, timeoutPromise]);
     if (docSnap && docSnap.exists && docSnap.data()) {
       const data = docSnap.data();
       if (Array.isArray(data.keys)) {
@@ -363,7 +373,41 @@ async function loadStoredGeminiKeys() {
     console.warn("Notice loading stored Gemini keys:", err);
   }
 }
-loadStoredGeminiKeys();
+if (!process.env.VERCEL) {
+  loadStoredGeminiKeys();
+}
+
+const GEMINI_MODEL_CANDIDATES = ["gemini-4-hydrogen", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
+
+async function generateContentWithFallback(
+  ai: GoogleGenAI,
+  contents: any,
+  config?: any
+) {
+  let lastError: any = null;
+  for (const modelName of GEMINI_MODEL_CANDIDATES) {
+    try {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents,
+        ...(config ? { config } : {})
+      });
+    } catch (err: any) {
+      lastError = err;
+      const msg = String(err?.message || err);
+      const isModelNotFound =
+        msg.includes("404") ||
+        msg.includes("NOT_FOUND") ||
+        msg.includes("not found") ||
+        msg.includes("is not supported");
+      if (isModelNotFound) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
 
 async function callGeminiWithRotation<T>(
   action: (ai: GoogleGenAI, apiKey: string, keyInfo: { index: number; total: number; masked: string }) => Promise<T>,
@@ -433,6 +477,9 @@ export const app = express();
   // Admin API Routes for Gemini Key Cycling (Menyokong laluan /api/... dan laluan terus Vercel)
   app.get(["/api/admin/gemini-keys", "/admin/gemini-keys"], async (req, res) => {
     try {
+      if (!geminiKeysLoadedOnce) {
+        await loadStoredGeminiKeys();
+      }
       const pool = getAllAvailableGeminiKeys();
       const currentActiveIndex = pool.length > 0 ? (geminiKeyCycleIndex % pool.length) : 0;
       return res.status(200).json({
@@ -516,6 +563,9 @@ export const app = express();
 
       // If no keys in body, fallback to all available keys in system
       if (keysToTest.length === 0) {
+        if (!geminiKeysLoadedOnce) {
+          await loadStoredGeminiKeys();
+        }
         keysToTest = getAllAvailableGeminiKeys();
       }
 
@@ -526,7 +576,7 @@ export const app = express();
         });
       }
 
-      // Test all keys concurrently in parallel with strict 5-second timeout to avoid any server gateway timeouts
+      // Test all keys concurrently in parallel with strict per-key timeout so serverless never times out
       const testPromises = keysToTest.map(async (item, i) => {
         try {
           const ai = new GoogleGenAI({
@@ -534,18 +584,14 @@ export const app = express();
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
 
-          // Timeout 5 seconds per key
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("Masa tamat sambungan (Timeout > 5s). Sila semak sambungan internet anda.")), 5000);
+            setTimeout(() => reject(new Error("Masa tamat sambungan (Timeout > 5s).")), 5000);
           });
 
-          const resp = await Promise.race([
-            ai.models.generateContent({
-              model: "gemini-3.8-flash",
-              contents: "Sahkan sambungan: balas OK.",
-            }),
-            timeoutPromise
-          ]);
+          const apiPromise = generateContentWithFallback(ai, "Sahkan sambungan: balas OK.");
+          apiPromise.catch(() => {});
+
+          const resp = await Promise.race([apiPromise, timeoutPromise]);
 
           return {
             id: i + 1,
@@ -580,7 +626,20 @@ export const app = express();
         }
       });
 
-      const results = await Promise.all(testPromises);
+      const globalTimeout = new Promise<any[]>((resolve) => {
+        setTimeout(() => {
+          resolve(keysToTest.map((item, i) => ({
+            id: i + 1,
+            masked: item.masked,
+            source: item.source,
+            status: 'Sambungan Perlahan (Timeout Pelayan)',
+            success: false,
+            error: 'Pelayan mengambil masa terlalu lama untuk menguji kunci ini.'
+          })));
+        }, 8000);
+      });
+
+      const results = await Promise.race([Promise.all(testPromises), globalTimeout]);
 
       return res.status(200).json({
         success: true,
@@ -629,13 +688,9 @@ Tingkatan: ${gradeLevel || 'Tingkatan 4'}.
 Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedia dimainkan!`;
 
       const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
-        return await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: userPrompt,
-          config: {
-            systemInstruction,
-            responseMimeType: "application/json"
-          }
+        return await generateContentWithFallback(ai, userPrompt, {
+          systemInstruction,
+          responseMimeType: "application/json"
         });
       }, clientKeys);
 
@@ -679,12 +734,8 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
 5. PULANGKAN KOD HTML SAHAJA. Mulakan terus dengan <!DOCTYPE html> hingga </html>. Jangan letakkan teks sembang sebelum atau selepas kod.`;
 
       const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
-        return await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: prompt,
-          config: {
-            systemInstruction,
-          }
+        return await generateContentWithFallback(ai, prompt, {
+          systemInstruction,
         });
       }, clientKeys);
 
@@ -1827,9 +1878,13 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
   
 // Vite setup and Start Server
 async function setupViteAndStart() {
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  if (process.env.VERCEL) {
+    return;
+  }
+  if (process.env.NODE_ENV !== "production") {
     try {
-      const { createServer: createViteServer } = await import("vite");
+      const vitePkg = "vite";
+      const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
@@ -1841,23 +1896,21 @@ async function setupViteAndStart() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    if (!process.env.VERCEL) {
-      app.get('*', (req, res) => {
-        const indexPath = path.join(distPath, 'index.html');
-        if (fs.existsSync(indexPath)) {
-          res.sendFile(indexPath);
-        } else {
-          res.status(200).send("Applet is running.");
-        }
-      });
-    }
-  }
-
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on port ${PORT}`);
+    app.get('*', (req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(200).send("Applet is running.");
+      }
     });
   }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 }
-setupViteAndStart();
+if (!process.env.VERCEL) {
+  setupViteAndStart();
+}
 export default app;
