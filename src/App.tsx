@@ -776,9 +776,17 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
     }
   }, [isAdminModalOpen]);
 
-  const handlePreview = () => {
-    setPreviewHtml(htmlCode);
-  };
+  useEffect(() => {
+    if (isGeneratingAI) return;
+    if (!htmlCode.trim()) {
+      setPreviewHtml('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setPreviewHtml(htmlCode);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [htmlCode, isGeneratingAI]);
 
   const handleIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
     if (autoHeight) {
@@ -1768,7 +1776,7 @@ function syncClassroom() {
       {activeTab === 'bina' && (
         <main className="flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-4 lg:gap-6 lg:h-[calc(100vh-76px)] overflow-y-auto lg:overflow-hidden pb-20 sm:pb-6">
           {/* LEFT PANEL */}
-        <div className="w-full lg:w-[440px] xl:w-[480px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:h-full">
+        <div className="w-full lg:w-[560px] xl:w-[660px] 2xl:w-[740px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:h-full">
           <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
             <div className="flex items-center gap-2">
               <Monitor className="w-5 h-5 text-blue-500" />
@@ -1925,12 +1933,6 @@ function syncClassroom() {
             )}
 
             <div className="flex flex-col gap-2.5 shrink-0">
-              <button 
-                onClick={handlePreview}
-                className="w-full bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 py-3 rounded-lg font-bold flex items-center justify-center transition shadow-sm"
-              >
-                <Play className="w-5 h-5 mr-2" /> UJI KOD (Preview)
-              </button>
               <button 
                 onClick={() => {
                   if (!user) {
@@ -2089,7 +2091,7 @@ function syncClassroom() {
                 <div className="text-center text-slate-400">
                   <Monitor className="w-16 h-16 mx-auto mb-4 opacity-30" />
                   <h3 className="text-lg font-medium text-slate-500 mb-1">Pratonton kod anda akan muncul di sini.</h3>
-                  <p className="text-sm">Tekan <span className="font-bold">UJI KOD</span> untuk bermula.</p>
+                  <p className="text-sm">Jana soalan dengan <span className="font-bold text-indigo-600">Prompt Gemini</span> atau tampal kod HTML di sebelah kiri untuk pratonton secara langsung.</p>
                 </div>
               )
             ) : (
