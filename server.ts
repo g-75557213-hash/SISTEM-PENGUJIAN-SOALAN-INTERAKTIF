@@ -2374,8 +2374,28 @@ async function setupViteAndStart() {
       const vitePkg = "vite";
       const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
       const vite = await createViteServer({
-        server: { middlewareMode: true },
+        server: {
+          middlewareMode: true,
+          hmr: false,
+          ws: false,
+        },
         appType: "spa",
+      });
+      // Prevent Vite 6 @vite/client from opening a failing WebSocket to port 24678
+      // when HMR is disabled in Express middlewareMode.
+      app.get("/@vite/client", async (_req, res, next) => {
+        try {
+          const result = await vite.transformRequest("/@vite/client");
+          if (!result?.code) return next();
+          const safeCode = result.code.replace(
+            "transport.connect(createHMRHandler(handleMessage));",
+            "/* Vite HMR WebSocket disabled */"
+          );
+          res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+          return res.send(safeCode);
+        } catch {
+          return next();
+        }
       });
       app.use(vite.middlewares);
     } catch (e) {
