@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, AlertCircle, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube, ExternalLink, Zap, Loader2 } from 'lucide-react';
+import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube, ExternalLink, Zap, Loader2 } from 'lucide-react';
 import { initAuth, googleSignIn, logout, getAccessToken } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets, convertAllSheet1LinksToDirect } from './lib/sheets';
@@ -1650,7 +1650,7 @@ function syncClassroom() {
       {activeTab === 'bina' && (
         <main className="flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-4 lg:gap-6 lg:h-[calc(100vh-76px)] overflow-y-auto lg:overflow-hidden pb-20 sm:pb-6">
           {/* LEFT PANEL */}
-        <div className="w-full lg:w-[350px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:h-full">
+        <div className="w-full lg:w-[440px] xl:w-[480px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:h-full">
           <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
             <div className="flex items-center gap-2">
               <Monitor className="w-5 h-5 text-blue-500" />
@@ -1735,27 +1735,18 @@ function syncClassroom() {
               readOnly={isGeneratingAI}
               onChange={(e) => setHtmlCode(e.target.value)}
               placeholder={isGeneratingAI ? "Sedang menerima kod HTML dari Gemini AI baris demi baris..." : "<!-- Tampal kod HTML interaktif anda di sini... -->"}
-              className={`flex-1 min-h-[150px] lg:min-h-0 w-full border rounded-lg p-3 font-mono text-xs sm:text-sm resize-y lg:resize-none outline-none transition ${
+              className={`flex-1 min-h-[320px] lg:min-h-0 w-full border rounded-lg p-3.5 font-mono text-xs sm:text-sm resize-y lg:resize-none outline-none transition ${
                 isGeneratingAI
                   ? 'bg-slate-950 text-emerald-300 border-indigo-500 ring-2 ring-indigo-300 shadow-inner'
                   : 'border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
               }`}
             />
-            <div className="flex items-center justify-between text-xs text-slate-400 mt-1 mb-4 shrink-0">
+            <div className="flex items-center justify-between text-xs text-slate-400 mt-1.5 mb-3 shrink-0">
               <span>{htmlCode ? `${htmlCode.split('\n').length} baris` : '0 baris'}</span>
               <span>{htmlCode.length.toLocaleString()} aksara</span>
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 shrink-0">
-              <div className="flex items-center text-yellow-800 font-medium mb-1">
-                <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" /> Panduan Penggunaan
-              </div>
-              <p className="text-xs text-yellow-700 leading-relaxed">
-                Tampal kod lengkap, tekan <span className="font-semibold italic">UJI KOD</span> untuk pratonton, kemudian tekan <span className="font-semibold italic">SUBMIT SOALAN INTERAKTIF</span>.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-auto shrink-0">
+            <div className="flex flex-col gap-2.5 shrink-0">
               <button 
                 onClick={handlePreview}
                 className="w-full bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200 py-3 rounded-lg font-bold flex items-center justify-center transition shadow-sm"
