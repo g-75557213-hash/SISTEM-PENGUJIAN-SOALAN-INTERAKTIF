@@ -1774,9 +1774,9 @@ function syncClassroom() {
         <>
           {/* MAIN CONTENT FOR MODE 1: SOALAN INTERAKTIF */}
       {activeTab === 'bina' && (
-        <main className="flex-1 flex flex-col lg:flex-row p-4 lg:p-6 gap-4 lg:gap-6 lg:h-[calc(100vh-76px)] overflow-y-auto lg:overflow-hidden pb-20 sm:pb-6">
+        <main className="flex-1 flex flex-col lg:flex-row lg:items-stretch p-4 lg:p-6 gap-4 lg:gap-6 lg:min-h-[820px] pb-20 sm:pb-6">
           {/* LEFT PANEL */}
-        <div className="w-full lg:w-[560px] xl:w-[660px] 2xl:w-[740px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:h-full">
+        <div className="w-full lg:w-[420px] xl:w-[495px] 2xl:w-[555px] flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 lg:min-h-[780px]">
           <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
             <div className="flex items-center gap-2">
               <Monitor className="w-5 h-5 text-blue-500" />
@@ -1954,7 +1954,7 @@ function syncClassroom() {
         </div>
 
         {/* RIGHT PANEL - PREVIEW */}
-        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px] lg:min-h-0">
+        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[540px] lg:min-h-[780px]">
           <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 gap-2 sm:gap-0">
             <div className="flex items-center text-slate-700 font-medium text-sm sm:text-base">
               <Monitor className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-amber-500" /> Paparan Soalan Interaktif (Live Preview)

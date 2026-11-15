@@ -6,10 +6,10 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Use initializeFirestore with experimentalAutoDetectLongPolling to prevent gRPC ECONNRESET stream connection drops
+// Force HTTP long-polling in browser to prevent WebChannel stream buffering/10s timeouts behind proxies or iframes
 export const db = initializeFirestore(
   app,
-  { experimentalAutoDetectLongPolling: true },
+  { experimentalForceLongPolling: true },
   (firebaseConfig as any).firestoreDatabaseId
 );
 
@@ -18,7 +18,16 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+      try {
+        const res = await fetch(
+          `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${(firebaseConfig as any).firestoreDatabaseId}/documents/test/connection?key=${firebaseConfig.apiKey}`
+        );
+        if (!res.ok && res.status !== 404) {
+          console.error("Please check your Firebase configuration.");
+        }
+      } catch {
+        // Transient offline / network issue — avoid false configuration error when offline
+      }
     }
   }
 }

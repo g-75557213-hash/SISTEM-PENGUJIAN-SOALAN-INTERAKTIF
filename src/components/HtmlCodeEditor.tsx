@@ -240,7 +240,7 @@ export const HtmlCodeEditor: React.FC<HtmlCodeEditorProps> = ({
 
   return (
     <div
-      className={`flex-1 min-h-[280px] lg:min-h-0 flex flex-col rounded-xl overflow-hidden border transition ${
+      className={`flex-1 min-h-[400px] lg:min-h-[480px] flex flex-col rounded-xl overflow-hidden border transition ${
         isGenerating
           ? 'border-indigo-500 ring-2 ring-indigo-300 shadow-md bg-[#0b1120]'
           : 'border-slate-800 bg-[#0d1117] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30 shadow-inner'
@@ -284,7 +284,7 @@ export const HtmlCodeEditor: React.FC<HtmlCodeEditorProps> = ({
       </div>
 
       {/* Synchronized Layered Syntax Highlighting Surface */}
-      <div className="relative flex-1 min-h-[240px] w-full overflow-hidden">
+      <div className="relative flex-1 min-h-[360px] lg:min-h-[440px] w-full overflow-hidden">
         <pre
           ref={preRef}
           aria-hidden="true"
