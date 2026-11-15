@@ -922,10 +922,12 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
     }
   });
 
-  // Endpoint Penjanaan 1-Klik Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling) + SSE Streaming
+  // Endpoint Penjanaan 1-Klik & Penambahbaikan Bersasar Soalan Interaktif menggunakan Gemini API dengan Kitaran Kunci (Key Cycling) + SSE Streaming
   app.post(["/api/generate-question", "/generate-question"], async (req, res) => {
-    const { prompt, keys: clientKeys, stream } = req.body || {};
-    if (!prompt) {
+    const { prompt, existingHtml, refinementPrompt, mode, keys: clientKeys, stream } = req.body || {};
+    const isRefineMode = mode === 'refine' && typeof existingHtml === 'string' && existingHtml.trim().length > 0 && typeof refinementPrompt === 'string' && refinementPrompt.trim().length > 0;
+
+    if (!isRefineMode && !prompt) {
       return res.status(400).json({ error: "Sila berikan prompt untuk penjanaan soalan" });
     }
 
@@ -945,7 +947,85 @@ Hasilkan kod HTML5 permainan/simulasi interaktif yang lengkap, menarik, dan sedi
       return htmlCode.trim();
     };
 
-    const systemInstruction = `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
+    const applySinglePatch = (html: string, searchRaw: string, replaceRaw: string): { html: string; matched: boolean } => {
+      const normHtml = html.replace(/\r\n/g, "\n");
+      const normSearch = searchRaw.replace(/\r\n/g, "\n");
+      const normReplace = replaceRaw.replace(/\r\n/g, "\n");
+
+      // 1. Padanan tepat
+      const exactIdx = normHtml.indexOf(normSearch);
+      if (exactIdx !== -1 && normSearch.length > 0) {
+        return {
+          html: normHtml.slice(0, exactIdx) + normReplace + normHtml.slice(exactIdx + normSearch.length),
+          matched: true
+        };
+      }
+
+      // 2. Padanan baris mengikut trim whitespace (elak perbezaan indentasi kecil)
+      const docLines = normHtml.split("\n");
+      let searchLines = normSearch.split("\n");
+      while (searchLines.length > 0 && searchLines[0].trim() === "") searchLines.shift();
+      while (searchLines.length > 0 && searchLines[searchLines.length - 1].trim() === "") searchLines.pop();
+
+      if (searchLines.length === 0) {
+        return { html: normHtml, matched: false };
+      }
+
+      for (let i = 0; i <= docLines.length - searchLines.length; i++) {
+        let allMatch = true;
+        for (let j = 0; j < searchLines.length; j++) {
+          if (docLines[i + j].trim() !== searchLines[j].trim()) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) {
+          const replaceLines = normReplace.split("\n");
+          const updatedLines = [
+            ...docLines.slice(0, i),
+            ...replaceLines,
+            ...docLines.slice(i + searchLines.length)
+          ];
+          return { html: updatedLines.join("\n"), matched: true };
+        }
+      }
+
+      return { html: normHtml, matched: false };
+    };
+
+    const applyAllPatches = (baseHtml: string, aiOutput: string): { html: string; appliedCount: number; totalBlocks: number } => {
+      const cleanedRaw = aiOutput.replace(/```(?:diff|html|txt)?\s*\n?/gi, "").replace(/\n?```\s*$/g, "");
+      const blockRegex = /<<<SEARCH[^\n]*\r?\n([\s\S]*?)\r?\n===[^\n]*\r?\n([\s\S]*?)\r?\n>>>/g;
+      let currentHtml = baseHtml.replace(/\r\n/g, "\n");
+      let appliedCount = 0;
+      let totalBlocks = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = blockRegex.exec(cleanedRaw)) !== null) {
+        totalBlocks++;
+        const resPatch = applySinglePatch(currentHtml, match[1], match[2]);
+        if (resPatch.matched) {
+          currentHtml = resPatch.html;
+          appliedCount++;
+        }
+      }
+
+      return { html: currentHtml, appliedCount, totalBlocks };
+    };
+
+    const systemInstruction = isRefineMode
+      ? `Anda ialah pakar penyuntingan kod HTML5/CSS/JS yang sangat tepat (surgical editor).
+TUGAS: Kemas kini HANYA bahagian kod HTML sedia ada yang diperlukan untuk memenuhi permintaan penambahbaikan pengguna.
+SYARAT WAJIB:
+1. JANGAN tulis semula keseluruhan kod jika hanya sebahagian kecil perlu diubah. Kekalkan 100% kod sedia ada yang tidak berkaitan (seperti fungsi window.hantarMarkahKeSistem, tamatkanPermainan, Web Audio API, atau soalan-soalan lain yang tidak diminta untuk ditukar).
+2. Pulangkan SATU atau LEBIH blok patch mengikut format TEKSTUAL TEPAT ini (tanpa markdown code fence):
+<<<SEARCH
+[salin baris kod asal SECARA TEPAT daripada kod sedia ada]
+===
+[kod gantian yang telah ditambah baik]
+>>>
+3. Pastikan setiap blok <<<SEARCH cukup unik (sertakan 2-4 baris konteks di sekeliling bahagian yang diubah) dan disalin sebiji-sebiji dari kod asal.`
+      : `Anda ialah pakar pembina web interaktif gamifikasi pendidikan KSSM Malaysia bertaraf dunia.
 Tugas anda adalah menjana kod HTML5 lengkap (single-file HTML) berserta CSS (Tailwind CDN https://cdn.tailwindcss.com) dan JavaScript fungsional mengikut arahan prompt pengguna.
 Syarat WAJIB:
 1. Menghasilkan satu fail HTML yang lengkap dan bersedia untuk diuji serta-merta di dalam iframe.
@@ -961,6 +1041,10 @@ function tamatkanPermainan(markahAkhir) {
 }
 Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
 5. PULANGKAN KOD HTML SAHAJA. Mulakan terus dengan <!DOCTYPE html> hingga </html>. Jangan letakkan teks sembang sebelum atau selepas kod.`;
+
+    const finalPrompt = isRefineMode
+      ? `PERMINTAAN PENAMBAHBAIKAN PENGGUNA:\n"${String(refinementPrompt).trim()}"\n\nKOD HTML SEDIA ADA:\n${existingHtml}\n\nPulangkan blok <<<SEARCH ... === ... >>> untuk mengedit HANYA bahagian yang perlu sahaja.`
+      : prompt;
 
     // Mod penstriman (SSE) untuk mengelakkan timeout serverless Vercel / proksi
     if (stream) {
@@ -978,25 +1062,116 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
         } catch {}
       };
 
-      sendEvent({ type: 'status', message: 'Memulakan sambungan pantas ke Gemini AI...' });
+      sendEvent({
+        type: 'status',
+        message: isRefineMode
+          ? 'Menganalisis kod sedia ada & mengenal pasti bahagian untuk ditambah baik...'
+          : 'Memulakan sambungan pantas ke Gemini AI...'
+      });
 
       try {
         let isFirstAttempt = true;
         const { result: htmlCode, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai, _apiKey, keyInfo) => {
           if (!isFirstAttempt) {
-            sendEvent({
-              type: 'reset',
-              message: `Menukar ke Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
-            });
+            if (!isRefineMode) {
+              sendEvent({
+                type: 'reset',
+                message: `Menukar ke Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+              });
+            } else {
+              sendEvent({
+                type: 'status',
+                message: `Menukar ke Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+              });
+            }
           } else {
             isFirstAttempt = false;
             sendEvent({
               type: 'status',
-              message: `Menjana kod HTML dengan Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+              message: isRefineMode
+                ? `Mengedit bahagian berkaitan guna Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
+                : `Menjana kod HTML dengan Kunci #${keyInfo.index + 1}/${keyInfo.total} (${keyInfo.masked})...`
             });
           }
 
-          const responseStream = await generateContentStreamWithFallback(ai, prompt, {
+          if (isRefineMode) {
+            const responseStream = await generateContentStreamWithFallback(ai, finalPrompt, {
+              systemInstruction,
+            });
+
+            let fullText = "";
+            let processedCursor = 0;
+            let workingHtml = String(existingHtml).replace(/\r\n/g, "\n");
+            let incrementalApplied = 0;
+
+            for await (const chunk of responseStream) {
+              const chunkText = chunk.text || "";
+              if (chunkText) {
+                fullText += chunkText;
+                // Kesan setiap blok <<<SEARCH ... === ... >>> yang sudah lengkap dan laksanakan terus pada paparan editor
+                const pendingSlice = fullText.slice(processedCursor);
+                const blockMatch = pendingSlice.match(/<<<SEARCH[^\n]*\r?\n([\s\S]*?)\r?\n===[^\n]*\r?\n([\s\S]*?)\r?\n>>>/);
+                if (blockMatch && typeof blockMatch.index === 'number') {
+                  const resPatch = applySinglePatch(workingHtml, blockMatch[1], blockMatch[2]);
+                  if (resPatch.matched) {
+                    workingHtml = resPatch.html;
+                    incrementalApplied++;
+                    sendEvent({
+                      type: 'patch',
+                      html: workingHtml,
+                      appliedCount: incrementalApplied,
+                      keyUsed: keyInfo.masked,
+                      keyIndex: keyInfo.index + 1,
+                      totalKeys: keyInfo.total,
+                      message: `Menyunting bahagian #${incrementalApplied} secara langsung...`
+                    });
+                  }
+                  processedCursor += blockMatch.index + blockMatch[0].length;
+                } else {
+                  sendEvent({
+                    type: 'progress',
+                    keyUsed: keyInfo.masked,
+                    keyIndex: keyInfo.index + 1,
+                    totalKeys: keyInfo.total,
+                    message: `Sedang meneliti & menyusun suntingan kod (${fullText.length} aksara dianalisis)...`
+                  });
+                }
+              }
+            }
+
+            // Sahkan semua blok patch pada kod asal supaya teratur
+            const patchResult = applyAllPatches(String(existingHtml), fullText);
+            if (patchResult.appliedCount > 0) {
+              return patchResult.html;
+            }
+
+            // Jika AI memulangkan HTML penuh secara terus
+            const directHtml = extractHtmlCode(fullText);
+            if (directHtml.includes("<!DOCTYPE") || directHtml.includes("<html")) {
+              return directHtml;
+            }
+
+            // Sandaran terakhir: minta suntingan penuh bersasar jika format patch gagal dipadankan
+            sendEvent({
+              type: 'status',
+              message: 'Menyempurnakan penyuntingan bersasar pada kod HTML...'
+            });
+            const fallbackResp = await generateContentWithFallback(
+              ai,
+              `Kemas kini kod HTML berikut berdasarkan permintaan: "${String(refinementPrompt).trim()}".\nHanya ubah bahagian yang perlu dan kekalkan bahagian serta fungsi sedia ada seperti window.hantarMarkahKeSistem.\nPulangkan kod HTML lengkap bermula <!DOCTYPE html> hingga </html> sahaja.\n\nKOD ASAL:\n${existingHtml}`,
+              {
+                systemInstruction: 'Pulangkan KOD HTML LENGKAP SAHAJA bermula <!DOCTYPE html> hingga </html> tanpa teks lain. Hanya ubah bahagian yang diminta oleh pengguna.'
+              }
+            );
+            const fallbackHtml = extractHtmlCode(fallbackResp.text || "");
+            if (!fallbackHtml) {
+              throw new Error("Gemini AI tidak dapat menyunting kod HTML. Sila cuba ayat arahan yang lebih jelas.");
+            }
+            return fallbackHtml;
+          }
+
+          // Mod penjanaan soalan baharu
+          const responseStream = await generateContentStreamWithFallback(ai, finalPrompt, {
             systemInstruction,
           });
 
@@ -1025,15 +1200,18 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
         sendEvent({
           type: 'done',
           success: true,
+          mode: isRefineMode ? 'refine' : 'generate',
           html: htmlCode,
           keyUsed,
           keyIndex,
           totalKeys,
-          message: `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
+          message: isRefineMode
+            ? `Penambahbaikan kod HTML berjaya dilaksanakan pada bahagian berkaitan (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
+            : `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
         });
         return res.end();
       } catch (err: any) {
-        console.error("Gagal menjana soalan (stream) dengan Gemini API:", err);
+        console.error("Gagal menjana/mengedit soalan (stream) dengan Gemini API:", err);
         sendEvent({
           type: 'error',
           success: false,
@@ -1046,26 +1224,41 @@ Dan panggil fungsi ini sebaik sahaja pemain tamat menjawab atau kehabisan nyawa.
     // Mod JSON biasa
     try {
       const { result: response, keyUsed, keyIndex, totalKeys } = await callGeminiWithRotation(async (ai) => {
-        return await generateContentWithFallback(ai, prompt, {
+        return await generateContentWithFallback(ai, finalPrompt, {
           systemInstruction,
         });
       }, clientKeys);
 
-      const htmlCode = extractHtmlCode(response.text || "");
+      let htmlCode = "";
+      if (isRefineMode) {
+        const rawOut = response.text || "";
+        const patched = applyAllPatches(String(existingHtml), rawOut);
+        if (patched.appliedCount > 0) {
+          htmlCode = patched.html;
+        } else {
+          htmlCode = extractHtmlCode(rawOut);
+        }
+      } else {
+        htmlCode = extractHtmlCode(response.text || "");
+      }
+
       if (!htmlCode) {
         return res.status(500).json({ error: "Gemini AI tidak memulangkan kod HTML yang sah. Sila cuba lagi." });
       }
 
       return res.json({
         success: true,
+        mode: isRefineMode ? 'refine' : 'generate',
         html: htmlCode,
         keyUsed,
         keyIndex,
         totalKeys,
-        message: `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
+        message: isRefineMode
+          ? `Penambahbaikan kod HTML berjaya dilaksanakan (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
+          : `Soalan interaktif berjaya dijana secara automatik oleh Gemini AI (Kunci #${keyIndex}/${totalKeys} [${keyUsed}])!`
       });
     } catch (err: any) {
-      console.error("Gagal menjana soalan dengan Gemini API:", err);
+      console.error("Gagal menjana/mengedit soalan dengan Gemini API:", err);
       return res.status(500).json({ error: err.message || "Ralat semasa menghubungi Gemini AI API" });
     }
   });

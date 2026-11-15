@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube, ExternalLink, Zap, Loader2 } from 'lucide-react';
+import { LogOut, Monitor, Smartphone, Maximize, CheckCircle, Copy, Play, Save, Settings, Code, Trash2, BookOpen, Lock, X, Youtube, ExternalLink, Zap, Loader2, RotateCcw, Send } from 'lucide-react';
 import { initAuth, googleSignIn, logout, getAccessToken } from './lib/firebase';
 import { User } from 'firebase/auth';
 import { saveQuestionToSheets, getQuestionsFromSheets, SoalanData, syncSubmissionsToSheets, saveSimulasiToSheets, getSimulasiFromSheets, SimulasiData, deleteQuestionFromSheets, updateQuestionMetaInSheets, convertAllSheet1LinksToDirect } from './lib/sheets';
@@ -11,6 +11,7 @@ import SemakanGuru from './components/SemakanGuru';
 import StudentView from './components/StudentView';
 import ColorfulSelect from './components/ColorfulSelect';
 import LiveGamificationStudio from './components/LiveGamificationStudio';
+import { HtmlCodeEditor } from './components/HtmlCodeEditor';
 import { Gamepad2, Sparkles, Layers } from 'lucide-react';
 
 export default function App() {
@@ -126,6 +127,9 @@ export default function App() {
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [isConvertingDirect, setIsConvertingDirect] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isRefiningAI, setIsRefiningAI] = useState(false);
+  const [refinementInput, setRefinementInput] = useState('');
+  const [previousHtmlBeforeRefine, setPreviousHtmlBeforeRefine] = useState<string | null>(null);
   const [aiGenerationStatus, setAiGenerationStatus] = useState('');
   const [aiActiveKeyBadge, setAiActiveKeyBadge] = useState('');
   const codeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -484,6 +488,7 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       }
 
       // Masukkan kod HTML akhir ke editor dan terus jalankan Live Preview
+      setPreviousHtmlBeforeRefine(null);
       setHtmlCode(data.html);
       setPreviewHtml(data.html);
       setAiGenerationStatus('✅ Penjanaan kod selesai! Pratonton dibuka secara automatik.');
@@ -494,6 +499,115 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       setIsGeneratingAI(false);
       setAiActiveKeyBadge('');
       setTimeout(() => setAiGenerationStatus(''), 3000);
+    }
+  };
+
+  const handleRefineWithAI = async () => {
+    const cleanInstruction = refinementInput.trim();
+    if (!htmlCode.trim()) {
+      alert('Sila jana atau tampal kod HTML soalan terlebih dahulu sebelum membuat penambahbaikan.');
+      return;
+    }
+    if (!cleanInstruction) {
+      alert('Sila taip arahan penambahbaikan yang anda mahukan (contoh: "Tukar warna latar kepada tema angkasa lepas" atau "Besarkan butang jawapan").');
+      return;
+    }
+
+    const clientKeys = geminiKeysInput || (typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_keys') || '' : '');
+    const snapshotBefore = htmlCode;
+    setPreviousHtmlBeforeRefine(snapshotBefore);
+    setIsGeneratingAI(true);
+    setIsRefiningAI(true);
+    setAiActiveKeyBadge('');
+    setAiGenerationStatus('Menganalisis kod sedia ada & mengedit bahagian yang perlu sahaja...');
+
+    try {
+      const res = await fetch('/api/generate-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'refine',
+          existingHtml: snapshotBefore,
+          refinementPrompt: cleanInstruction,
+          keys: clientKeys,
+          stream: true
+        })
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+
+      if (contentType.includes('text/event-stream') && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const block of lines) {
+            const dataLine = block.split('\n').find(l => l.startsWith('data: '));
+            if (!dataLine) continue;
+            try {
+              const evt = JSON.parse(dataLine.slice(6));
+              if (evt.type === 'status' || evt.type === 'progress') {
+                if (evt.message) setAiGenerationStatus(evt.message);
+                if (evt.keyUsed) {
+                  setAiActiveKeyBadge(`Kunci #${evt.keyIndex}/${evt.totalKeys} (${evt.keyUsed})`);
+                }
+              } else if (evt.type === 'patch') {
+                if (evt.html) {
+                  setHtmlCode(evt.html);
+                }
+                if (evt.message) setAiGenerationStatus(evt.message);
+                if (evt.keyUsed) {
+                  setAiActiveKeyBadge(`Kunci #${evt.keyIndex}/${evt.totalKeys} (${evt.keyUsed})`);
+                }
+              } else if (evt.type === 'done') {
+                data = evt;
+              } else if (evt.type === 'error') {
+                throw new Error(evt.error || 'Gagal menyunting kod HTML daripada Gemini AI');
+              }
+            } catch (evtErr: any) {
+              if (evtErr?.message && !evtErr.message.includes('JSON')) {
+                throw evtErr;
+              }
+            }
+          }
+        }
+
+        if (!data.success || !data.html) {
+          throw new Error(data.error || 'Suntingan penambahbaikan gagal diselesaikan. Sila cuba lagi.');
+        }
+      } else {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(text.length < 200 ? text : 'Pelayan tidak dapat memproses penambahbaikan. Sila cuba lagi.');
+        }
+        if (!res.ok || !data.success || !data.html) {
+          throw new Error(data.error || 'Gagal menyunting kod HTML daripada Gemini AI');
+        }
+      }
+
+      setHtmlCode(data.html);
+      setPreviewHtml(data.html);
+      setRefinementInput('');
+      setAiGenerationStatus('✅ Penambahbaikan selesai! Hanya bahagian berkaitan telah dikemas kini.');
+    } catch (err: any) {
+      console.error('Error refining HTML with AI:', err);
+      alert('Ralat semasa penambahbaikan kod: ' + (err.message || err));
+    } finally {
+      setIsGeneratingAI(false);
+      setIsRefiningAI(false);
+      setAiActiveKeyBadge('');
+      setTimeout(() => setAiGenerationStatus(''), 3500);
     }
   };
 
@@ -1671,12 +1785,27 @@ function syncClassroom() {
           </div>
 
           <div className="flex-1 p-4 flex flex-col overflow-hidden">
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-2.5 shrink-0">
               <div className="flex items-center gap-2 text-slate-600 uppercase tracking-wider font-semibold">
                 <Code className="w-4 h-4 text-slate-400" />
                 <span className="text-xs leading-tight">Kod HTML<br/>Soalan</span>
               </div>
               <div className="flex gap-2">
+                {previousHtmlBeforeRefine && !isGeneratingAI && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHtmlCode(previousHtmlBeforeRefine);
+                      setPreviewHtml(previousHtmlBeforeRefine);
+                      setPreviousHtmlBeforeRefine(null);
+                    }}
+                    className="text-[10px] text-amber-700 hover:bg-amber-100 font-semibold flex items-center justify-center gap-1 bg-amber-50 border border-amber-200 px-2 py-1.5 rounded transition cursor-pointer"
+                    title="Pulihkan kod sebelum penambahbaikan AI terakhir"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span className="leading-tight">Undo<br/>Edit</span>
+                  </button>
+                )}
                 {htmlCode.trim().length === 0 ? (
                   <button 
                     onClick={async () => {
@@ -1701,6 +1830,7 @@ function syncClassroom() {
                     onClick={() => {
                       setHtmlCode('');
                       setPreviewHtml('');
+                      setPreviousHtmlBeforeRefine(null);
                     }}
                     className="text-[10px] text-red-600 hover:bg-red-100 font-medium flex items-center justify-center gap-1.5 bg-red-50 border border-red-200 px-2 py-1.5 rounded w-[76px] transition"
                   >
@@ -1712,7 +1842,7 @@ function syncClassroom() {
             </div>
             
             {(isGeneratingAI || aiGenerationStatus) && (
-              <div className={`mb-2.5 p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 shrink-0 ${
+              <div className={`mb-2 p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 shrink-0 ${
                 isGeneratingAI
                   ? 'bg-indigo-950 text-emerald-300 border-indigo-500 shadow-sm'
                   : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -1733,22 +1863,66 @@ function syncClassroom() {
               </div>
             )}
 
-            <textarea
-              ref={codeTextareaRef}
+            <HtmlCodeEditor
+              textareaRef={codeTextareaRef}
               value={htmlCode}
               readOnly={isGeneratingAI}
-              onChange={(e) => setHtmlCode(e.target.value)}
+              isGenerating={isGeneratingAI}
+              onChange={(val) => setHtmlCode(val)}
               placeholder={isGeneratingAI ? "Sedang menerima kod HTML dari Gemini AI baris demi baris..." : "<!-- Tampal kod HTML interaktif anda di sini... -->"}
-              className={`flex-1 min-h-[320px] lg:min-h-0 w-full border rounded-lg p-3.5 font-mono text-xs sm:text-sm resize-y lg:resize-none outline-none transition ${
-                isGeneratingAI
-                  ? 'bg-slate-950 text-emerald-300 border-indigo-500 ring-2 ring-indigo-300 shadow-inner'
-                  : 'border-slate-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-              }`}
             />
-            <div className="flex items-center justify-between text-xs text-slate-400 mt-1.5 mb-3 shrink-0">
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5 mb-2 shrink-0">
               <span>{htmlCode ? `${htmlCode.split('\n').length} baris` : '0 baris'}</span>
               <span>{htmlCode.length.toLocaleString()} aksara</span>
             </div>
+
+            {/* RUANGAN INPUT PENAMBAHBAIKAN (SUNTINGAN BERSASAR AI) */}
+            {htmlCode.trim().length > 0 && (
+              <div className="mb-2.5 p-2.5 rounded-xl bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-blue-50/80 border border-indigo-200 shrink-0 space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-extrabold text-indigo-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    <span>Penambahbaikan Soalan (AI Edit Bersasar)</span>
+                  </label>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white text-indigo-700 border border-indigo-200">
+                    Ubah Bahagian Perlu Sahaja
+                  </span>
+                </div>
+                <div className="flex gap-1.5 items-end">
+                  <textarea
+                    rows={2}
+                    value={refinementInput}
+                    disabled={isGeneratingAI}
+                    onChange={(e) => setRefinementInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isGeneratingAI && refinementInput.trim()) {
+                          handleRefineWithAI();
+                        }
+                      }
+                    }}
+                    placeholder="Cth: Tukar latar belakang ke tema angkasa, besarkan butang jawapan, atau baiki soalan no. 2..."
+                    className="flex-1 text-xs p-2 rounded-lg border border-indigo-200 bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none resize-none leading-snug disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRefineWithAI}
+                    disabled={isGeneratingAI || !refinementInput.trim()}
+                    className="h-[52px] px-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold flex flex-col items-center justify-center gap-0.5 shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    title="Hanya edit bahagian yang diminta pada kod HTML sedia ada"
+                  >
+                    {isRefiningAI ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span className="text-[10px] leading-none">{isRefiningAI ? 'Edit...' : 'Baiki'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2.5 shrink-0">
               <button 
