@@ -541,9 +541,10 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
     }
   };
 
-  const fetchGeminiKeysStatus = async () => {
+  const fetchGeminiKeysStatus = async (includeRaw = false) => {
     try {
-      const res = await fetch('/api/admin/gemini-keys');
+      const url = includeRaw ? '/api/admin/gemini-keys?includeRaw=1' : '/api/admin/gemini-keys';
+      const res = await fetch(url, includeRaw ? { headers: { 'x-admin-panel': 'true' } } : undefined);
       const text = await res.text();
       let data: any = {};
       try {
@@ -553,7 +554,7 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       }
       if (data.success) {
         setGeminiPoolInfo(data);
-        if (data.rawKeysText && !geminiKeysInput) {
+        if (includeRaw && data.rawKeysText && !geminiKeysInput) {
           setGeminiKeysInput(data.rawKeysText);
         }
       }
@@ -571,12 +572,12 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
         .map(k => k.trim())
         .filter(k => k.length > 5);
 
-      // 1. Simpan serta-merta ke dalam localStorage pelayar (Penyimpanan Utama Terjamin)
+      // 1. Simpan serta-merta ke dalam localStorage pelayar Admin
       if (typeof window !== 'undefined') {
         localStorage.setItem('gemini_custom_keys', cleanKeys);
       }
 
-      // 2. Segerakkan ke pelayan (Serverless Backend) secara selamat tanpa menyekat UI
+      // 2. Segerakkan ke pelayan & Cloud Firestore supaya SEMUA pengguna boleh menggunakannya
       let serverResponse: any = null;
       try {
         const res = await fetch('/api/admin/gemini-keys', {
@@ -597,8 +598,11 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       }
 
       const totalCount = parsedKeysList.length;
-      alert(`Berjaya! Sebanyak ${totalCount} Kunci API Gemini telah berjaya disimpan ke dalam sistem.\n\nKunci ini disimpan secara automatik dalam simpanan pelayar (localStorage) dan disegerakkan ke pelayan untuk kitaran penjanaan automatik (Round-Robin Cycle).`);
-      await fetchGeminiKeysStatus();
+      const cloudNote = serverResponse?.cloudSynced
+        ? 'Kunci ini telah disegerakkan ke Cloud Firestore & pelayan — SESIAPA SAHAJA yang menggunakan web app ini kini boleh terus menggunakannya!'
+        : 'Kunci ini telah disimpan ke dalam kitaran pelayan & pelayar anda.';
+      alert(`Berjaya! Sebanyak ${totalCount} Kunci API Gemini telah berjaya disimpan ke dalam sistem.\n\n${cloudNote}`);
+      await fetchGeminiKeysStatus(true);
     } catch (err: any) {
       console.error(err);
       alert('Kunci API disimpan ke dalam pelayar anda: ' + (err.message || err));
@@ -633,7 +637,7 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
       } else {
         alert(`Ujian Kitaran Selesai!\n\nTiada kunci yang sah atau kuota tamat bagi ${data.totalTested} kunci yang diuji. Sila lihat perincian status di bawah.`);
       }
-      await fetchGeminiKeysStatus();
+      await fetchGeminiKeysStatus(true);
     } catch (err: any) {
       console.error(err);
       alert('Ralat semasa menguji kunci: ' + (err.message || err));
@@ -643,18 +647,18 @@ ANALISIS GAMBAR YANG DIBERI DENGAN TELITI.`;
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedLocal = localStorage.getItem('gemini_custom_keys');
-      if (savedLocal && savedLocal.trim()) {
-        setGeminiKeysInput(savedLocal.trim());
-      }
-    }
-    fetchGeminiKeysStatus();
+    fetchGeminiKeysStatus(false);
   }, []);
 
   useEffect(() => {
     if (isAdminModalOpen) {
-      fetchGeminiKeysStatus();
+      if (typeof window !== 'undefined' && !geminiKeysInput) {
+        const savedLocal = localStorage.getItem('gemini_custom_keys');
+        if (savedLocal && savedLocal.trim()) {
+          setGeminiKeysInput(savedLocal.trim());
+        }
+      }
+      fetchGeminiKeysStatus(true);
     }
   }, [isAdminModalOpen]);
 
@@ -2498,6 +2502,20 @@ function syncClassroom() {
 
             {/* Pinned Bottom Footer Action Buttons */}
             <div className="shrink-0 p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col gap-3">
+              {geminiPoolInfo && (
+                <div className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg border flex items-center justify-between ${
+                  geminiPoolInfo.totalKeys > 0
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  <span>
+                    {geminiPoolInfo.totalKeys > 0
+                      ? `✅ ${geminiPoolInfo.totalKeys} Kunci API Dikongsi Sedia Digunakan oleh Semua Pengguna`
+                      : '⚠️ Belum ada Kunci API dikonfigurasi di Panel Admin'}
+                  </span>
+                </div>
+              )}
+
               {/* Primary: 1-Click Gemini AI Generator */}
               <button 
                 onClick={handleGenerateWithAI}
@@ -2827,7 +2845,7 @@ function syncClassroom() {
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 mt-0.5">
-                        Sistem menggunakan kunci-kunci ini secara kitaran (Round-Robin Cycle). Jika kuota/token sesuatu kunci tamat, sistem automatik beralih ke kunci seterusnya tanpa gagal.
+                        Kunci yang disimpan disegerakkan ke Cloud Firestore & pelayan supaya <strong>sesiapa sahaja yang menggunakan web app ini</strong> boleh terus menjana soalan. Sistem menggunakan kitaran (Round-Robin Cycle) & auto-failover jika kuota kunci tamat.
                       </p>
                     </div>
                   </div>

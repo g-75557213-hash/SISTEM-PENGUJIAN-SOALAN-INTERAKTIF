@@ -1,8 +1,47 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import fs from 'fs';
+import path from 'path';
 
 export const maxDuration = 30;
 
 const GEMINI_MODEL_CANDIDATES = ['gemini-4-hydrogen', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+
+function readFirebaseConfig() {
+  const fallback = {
+    projectId: 'mineral-actor-450802-f9',
+    apiKey: 'AIzaSyBoZYJedGucsSckBDVBZOA3Uvx3KUH94us',
+    firestoreDatabaseId: 'ai-studio-c473e287-8d6c-452e-8a47-f0e2ebe17b17',
+  };
+  try {
+    const p = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(p)) {
+      return { ...fallback, ...JSON.parse(fs.readFileSync(p, 'utf8')) };
+    }
+  } catch {}
+  return fallback;
+}
+
+async function fetchFirestoreKeys(): Promise<string[]> {
+  const cfg = readFirebaseConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${cfg.firestoreDatabaseId}/documents/admin_settings/gemini_keys?key=${cfg.apiKey}`;
+    const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+    if (resp.ok) {
+      const json: any = await resp.json();
+      const rawValues = json?.fields?.keys?.arrayValue?.values;
+      const extracted = Array.isArray(rawValues)
+        ? rawValues.map((v: any) => v?.stringValue).filter(Boolean)
+        : [];
+      return parseRawKeys(extracted).filter((k) => !k.startsWith('AIzaSyD_TEST'));
+    }
+  } catch {
+  } finally {
+    clearTimeout(timer);
+  }
+  return [];
+}
 
 function parseRawKeys(input: any): string[] {
   if (!input) return [];
@@ -79,14 +118,15 @@ export async function POST(request: Request) {
     }
 
     if (keysToTest.length === 0) {
+      const firestoreKeys = await fetchFirestoreKeys();
       const seen = new Set<string>();
-      for (const source of [process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY]) {
+      for (const [idx, source] of [firestoreKeys, process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY].entries()) {
         for (const k of parseRawKeys(source)) {
           if (!seen.has(k)) {
             seen.add(k);
             keysToTest.push({
               key: k,
-              source: 'Fail Persekitaran (.env)',
+              source: idx === 0 ? 'Panel Pentadbiran (Cloud Firestore)' : 'Fail Persekitaran (.env)',
               masked: maskApiKey(k),
             });
           }

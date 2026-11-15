@@ -1,10 +1,58 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import fs from 'fs';
+import path from 'path';
 
 export const maxDuration = 60;
 
 const GEMINI_MODEL_CANDIDATES = ['gemini-4-hydrogen', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
 
 let vercelCycleIndex = 0;
+let cachedFirestoreKeys: string[] = [];
+let lastFirestoreFetchAt = 0;
+const FIRESTORE_CACHE_TTL_MS = 30000;
+
+function readFirebaseConfig() {
+  const fallback = {
+    projectId: 'mineral-actor-450802-f9',
+    apiKey: 'AIzaSyBoZYJedGucsSckBDVBZOA3Uvx3KUH94us',
+    firestoreDatabaseId: 'ai-studio-c473e287-8d6c-452e-8a47-f0e2ebe17b17',
+  };
+  try {
+    const p = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(p)) {
+      return { ...fallback, ...JSON.parse(fs.readFileSync(p, 'utf8')) };
+    }
+  } catch {}
+  return fallback;
+}
+
+async function getSharedFirestoreKeys(forceRefresh = false): Promise<string[]> {
+  if (!forceRefresh && Date.now() - lastFirestoreFetchAt < FIRESTORE_CACHE_TTL_MS && cachedFirestoreKeys.length > 0) {
+    return cachedFirestoreKeys;
+  }
+  const cfg = readFirebaseConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/${cfg.firestoreDatabaseId}/documents/admin_settings/gemini_keys?key=${cfg.apiKey}`;
+    const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+    if (resp.ok) {
+      const json: any = await resp.json();
+      const rawValues = json?.fields?.keys?.arrayValue?.values;
+      const extracted = Array.isArray(rawValues)
+        ? rawValues.map((v: any) => v?.stringValue).filter(Boolean)
+        : [];
+      const cleaned = parseRawKeys(extracted).filter((k) => !k.startsWith('AIzaSyD_TEST'));
+      cachedFirestoreKeys = cleaned;
+      lastFirestoreFetchAt = Date.now();
+      return cleaned;
+    }
+  } catch {
+  } finally {
+    clearTimeout(timer);
+  }
+  return cachedFirestoreKeys;
+}
 
 function parseRawKeys(input: any): string[] {
   if (!input) return [];
@@ -22,11 +70,11 @@ function maskApiKey(key: string): string {
   return key.slice(0, 7) + '...' + key.slice(-4);
 }
 
-function getAvailableKeys(extraKeys?: any): { key: string; masked: string }[] {
+function getAvailableKeys(extraKeys?: any, firestoreKeys?: string[]): { key: string; masked: string }[] {
   const result: { key: string; masked: string }[] = [];
   const seen = new Set<string>();
 
-  for (const source of [extraKeys, process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY]) {
+  for (const source of [extraKeys, firestoreKeys, process.env.GEMINI_API_KEYS, process.env.GEMINI_API_KEY]) {
     for (const k of parseRawKeys(source)) {
       if (!seen.has(k)) {
         seen.add(k);
@@ -119,7 +167,8 @@ export async function POST(request: Request) {
     });
   }
 
-  const pool = getAvailableKeys(clientKeys);
+  const firestoreKeys = await getSharedFirestoreKeys();
+  const pool = getAvailableKeys(clientKeys, firestoreKeys);
   if (pool.length === 0) {
     return new Response(
       JSON.stringify({

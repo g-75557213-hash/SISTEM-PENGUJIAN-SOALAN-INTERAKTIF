@@ -381,28 +381,152 @@ function syncEnvGeminiKeys(keys: string[]) {
 }
 
 let geminiKeysLoadedOnce = false;
-async function loadStoredGeminiKeys() {
-  if (geminiKeysLoadedOnce) return;
-  geminiKeysLoadedOnce = true;
-  try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1200));
-    const dbPromise = db.collection("admin_settings").doc("gemini_keys").get();
-    dbPromise.catch(() => {});
-    const docSnap: any = await Promise.race([dbPromise, timeoutPromise]);
-    if (docSnap && docSnap.exists && docSnap.data()) {
-      const data = docSnap.data();
-      if (Array.isArray(data.keys)) {
-        const cleaned = parseRawKeys(data.keys).filter(k => !k.startsWith("AIzaSyD_TEST"));
-        adminConfiguredGeminiKeys = cleaned;
-        if (cleaned.length > 0 && !process.env.GEMINI_API_KEYS) {
-          process.env.GEMINI_API_KEYS = cleaned.join(",");
-        }
-        console.log(`[Gemini Pool] Berjaya memuatkan ${adminConfiguredGeminiKeys.length} kunci API dari pangkalan data.`);
-      }
-    }
-  } catch (err) {
-    console.warn("Notice loading stored Gemini keys:", err);
+let lastFirestoreKeysSyncAt = 0;
+let loadingKeysPromise: Promise<void> | null = null;
+const FIRESTORE_KEYS_TTL_MS = 30000;
+
+async function fetchGeminiKeysFromFirestoreREST(): Promise<{ ok: boolean; keys: string[]; explicitlyCleared: boolean }> {
+  if (!firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId || !firebaseConfig?.apiKey) {
+    return { ok: false, keys: [], explicitlyCleared: false };
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/admin_settings/gemini_keys?key=${firebaseConfig.apiKey}`;
+    const resp = await fetch(url, { method: "GET", signal: controller.signal });
+    if (resp.status === 404) {
+      return { ok: true, keys: [], explicitlyCleared: false };
+    }
+    if (!resp.ok) {
+      return { ok: false, keys: [], explicitlyCleared: false };
+    }
+    const json: any = await resp.json();
+    const rawValues = json?.fields?.keys?.arrayValue?.values;
+    const extracted = Array.isArray(rawValues)
+      ? rawValues.map((v: any) => v?.stringValue).filter(Boolean)
+      : [];
+    const cleaned = parseRawKeys(extracted).filter((k) => !k.startsWith("AIzaSyD_TEST"));
+    const explicitlyCleared = json?.fields?.explicitlyCleared?.booleanValue === true;
+    return { ok: true, keys: cleaned, explicitlyCleared };
+  } catch {
+    return { ok: false, keys: [], explicitlyCleared: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function saveGeminiKeysToFirestoreREST(keys: string[], explicitlyCleared: boolean): Promise<boolean> {
+  if (!firebaseConfig?.projectId || !firebaseConfig?.firestoreDatabaseId || !firebaseConfig?.apiKey) {
+    return false;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/admin_settings/gemini_keys?key=${firebaseConfig.apiKey}`;
+    const payload = {
+      fields: {
+        keys: {
+          arrayValue: {
+            values: keys.map((k) => ({ stringValue: k }))
+          }
+        },
+        explicitlyCleared: {
+          booleanValue: explicitlyCleared
+        },
+        updatedAt: {
+          timestampValue: new Date().toISOString()
+        }
+      }
+    };
+    const resp = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadStoredGeminiKeys(forceRefresh = false) {
+  const isFresh = geminiKeysLoadedOnce && (Date.now() - lastFirestoreKeysSyncAt < FIRESTORE_KEYS_TTL_MS);
+  if (!forceRefresh && isFresh) return;
+  if (loadingKeysPromise) return loadingKeysPromise;
+
+  loadingKeysPromise = (async () => {
+    try {
+      const restResult = await fetchGeminiKeysFromFirestoreREST();
+      if (restResult.ok) {
+        if (restResult.keys.length > 0) {
+          adminConfiguredGeminiKeys = restResult.keys;
+          if (!process.env.GEMINI_API_KEYS) {
+            process.env.GEMINI_API_KEYS = restResult.keys.join(",");
+          }
+        } else if (!restResult.explicitlyCleared) {
+          // Jika Firestore masih kosong dan tidak dikosongkan secara manual, segerakkan kunci daripada pembolehubah persekitaran pelayan supaya boleh dikongsi dengan semua pengguna
+          const envFallback = [
+            ...parseRawKeys(process.env.GEMINI_API_KEYS),
+            ...parseRawKeys(process.env.GEMINI_API_KEY)
+          ].filter((k, idx, arr) => !k.startsWith("AIzaSyD_TEST") && arr.indexOf(k) === idx);
+
+          if (envFallback.length > 0) {
+            adminConfiguredGeminiKeys = envFallback;
+            await saveGeminiKeysToFirestoreREST(envFallback, false);
+          } else {
+            adminConfiguredGeminiKeys = [];
+          }
+        } else {
+          adminConfiguredGeminiKeys = [];
+        }
+        geminiKeysLoadedOnce = true;
+        lastFirestoreKeysSyncAt = Date.now();
+        return;
+      }
+
+      // Sandaran melalui Firebase Web SDK jika REST tidak dapat dicapai
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const waitMs = process.env.VERCEL ? 2000 : 3500;
+        const dbPromise = db
+          .collection("admin_settings")
+          .doc("gemini_keys")
+          .get()
+          .then((docSnap: any) => {
+            if (docSnap && docSnap.exists && docSnap.data()) {
+              const data = docSnap.data();
+              if (Array.isArray(data.keys)) {
+                const cleaned = parseRawKeys(data.keys).filter(k => !k.startsWith("AIzaSyD_TEST"));
+                adminConfiguredGeminiKeys = cleaned;
+                if (cleaned.length > 0 && !process.env.GEMINI_API_KEYS) {
+                  process.env.GEMINI_API_KEYS = cleaned.join(",");
+                }
+              }
+            }
+            geminiKeysLoadedOnce = true;
+            lastFirestoreKeysSyncAt = Date.now();
+            return docSnap;
+          })
+          .catch(() => null);
+
+        const softTimeout = new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), waitMs);
+        });
+        await Promise.race([dbPromise, softTimeout]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch {
+      // Abaikan ralat sambungan dengan selamat
+    } finally {
+      loadingKeysPromise = null;
+    }
+  })();
+
+  return loadingKeysPromise;
 }
 if (!process.env.VERCEL) {
   loadStoredGeminiKeys();
@@ -486,6 +610,7 @@ async function callGeminiWithRotation<T>(
   action: (ai: GoogleGenAI, apiKey: string, keyInfo: { index: number; total: number; masked: string }) => Promise<T>,
   extraKeys?: any
 ): Promise<{ result: T; keyUsed: string; keyIndex: number; totalKeys: number }> {
+  await loadStoredGeminiKeys();
   const pool = getAllAvailableGeminiKeys(extraKeys);
   if (pool.length === 0) {
     throw new Error("Tiada GEMINI_API_KEY ditemui dalam sistem atau panel Admin. Sila masukkan sekurang-kurangnya satu kunci API di Panel Pentadbiran (Admin).");
@@ -550,16 +675,18 @@ export const app = express();
   // Admin API Routes for Gemini Key Cycling (Menyokong laluan /api/... dan laluan terus Vercel)
   app.get(["/api/admin/gemini-keys", "/admin/gemini-keys"], async (req, res) => {
     try {
-      if (!geminiKeysLoadedOnce) {
-        await loadStoredGeminiKeys();
-      }
+      const includeRaw = req.query.includeRaw === '1' || req.headers['x-admin-panel'] === 'true';
+      await loadStoredGeminiKeys(includeRaw);
       const pool = getAllAvailableGeminiKeys();
       const currentActiveIndex = pool.length > 0 ? (geminiKeyCycleIndex % pool.length) : 0;
+      const sharedKeysList = adminConfiguredGeminiKeys.length > 0
+        ? adminConfiguredGeminiKeys
+        : pool.map(item => item.key);
       return res.status(200).json({
         success: true,
         totalKeys: pool.length,
         currentActiveIndex: currentActiveIndex + 1,
-        rawKeysText: adminConfiguredGeminiKeys.join("\n"),
+        rawKeysText: includeRaw ? sharedKeysList.join("\n") : "",
         keys: pool.map((item, idx) => ({
           id: idx + 1,
           masked: item.masked,
@@ -578,25 +705,42 @@ export const app = express();
       const parsed = parseRawKeys(keys);
 
       adminConfiguredGeminiKeys = parsed;
+      geminiKeysLoadedOnce = true;
+      lastFirestoreKeysSyncAt = Date.now();
       syncEnvGeminiKeys(parsed);
 
-      // Best effort save to Firestore with strict 1.5s timeout so it NEVER blocks Vercel / serverless
-      try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1500));
-        const dbSetPromise = db.collection("admin_settings").doc("gemini_keys").set({
-          keys: parsed,
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-        dbSetPromise.catch(() => {});
-        await Promise.race([dbSetPromise, timeoutPromise]);
-      } catch (dbErr) {
-        console.warn("Notice saving gemini_keys to Firestore:", dbErr);
+      // Simpan ke Cloud Firestore melalui REST API pantas supaya SEMUA pengguna & deployment dapat menggunakannya serta-merta
+      let cloudSynced = await saveGeminiKeysToFirestoreREST(parsed, parsed.length === 0);
+      if (!cloudSynced) {
+        let saveTimer: ReturnType<typeof setTimeout> | null = null;
+        try {
+          const dbSetPromise = db
+            .collection("admin_settings")
+            .doc("gemini_keys")
+            .set({
+              keys: parsed,
+              explicitlyCleared: parsed.length === 0,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true })
+            .then(() => true)
+            .catch(() => false);
+
+          const softTimeout = new Promise<boolean>((resolve) => {
+            saveTimer = setTimeout(() => resolve(false), 2500);
+          });
+          cloudSynced = await Promise.race([dbSetPromise, softTimeout]);
+        } finally {
+          if (saveTimer) clearTimeout(saveTimer);
+        }
       }
 
       const pool = getAllAvailableGeminiKeys(parsed);
       return res.status(200).json({
         success: true,
-        message: `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan & pembolehubah persekitaran GEMINI_API_KEYS!`,
+        cloudSynced,
+        message: cloudSynced
+          ? `Berjaya menyimpan ${parsed.length} Kunci API Gemini ke Cloud Firestore & pelayan! Semua pengguna aplikasi web ini kini boleh terus menggunakannya.`
+          : `Berjaya mengemas kini ${parsed.length} Kunci API Gemini ke dalam kitaran pelayan & pembolehubah persekitaran GEMINI_API_KEYS!`,
         totalKeys: pool.length,
         currentActiveIndex: pool.length > 0 ? (geminiKeyCycleIndex % pool.length) + 1 : 0,
         keys: pool.map((item, idx) => ({
@@ -609,6 +753,7 @@ export const app = express();
       console.error("Error in gemini-keys save endpoint:", err);
       return res.status(200).json({
         success: true,
+        cloudSynced: false,
         message: "Kunci API berjaya disimpan.",
         totalKeys: adminConfiguredGeminiKeys.length,
         currentActiveIndex: 1,
@@ -632,11 +777,9 @@ export const app = express();
         }));
       }
 
-      // If no keys in body, fallback to all available keys in system
+      // If no keys in body, fallback to all available keys in system (Firestore + env)
       if (keysToTest.length === 0) {
-        if (!geminiKeysLoadedOnce) {
-          await loadStoredGeminiKeys();
-        }
+        await loadStoredGeminiKeys(true);
         keysToTest = getAllAvailableGeminiKeys();
       }
 
